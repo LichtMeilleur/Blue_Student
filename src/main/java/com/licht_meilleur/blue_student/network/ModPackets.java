@@ -14,9 +14,17 @@ public class ModPackets {
             int mode = buf.readInt();
 
             server.execute(() -> {
-                var world = player.getWorld();
+                var world = player.getWorld(); // ★ここが必要
+
                 if (world.getEntityById(entityId) instanceof ShirokoEntity e) {
-                    // 所有者チェック等は後で入れてOK（まず動作優先）
+                    // owner未設定なら初回は操作した人をownerにする（運用に合わせて）
+                    if (e.getOwnerUuid() == null) {
+                        e.setOwnerUuid(player.getUuid());
+                    }
+
+                    // owner以外は操作不可
+                    if (!player.getUuid().equals(e.getOwnerUuid())) return;
+
                     e.setAiMode(mode);
                 }
             });

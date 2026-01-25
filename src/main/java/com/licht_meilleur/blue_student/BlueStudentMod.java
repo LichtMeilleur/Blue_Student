@@ -19,6 +19,10 @@ import net.minecraft.block.AbstractBlock;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.block.entity.BlockEntityType;
+import com.licht_meilleur.blue_student.block.OnlyBedBlock;
+import com.licht_meilleur.blue_student.block.entity.OnlyBedBlockEntity;
+import com.licht_meilleur.blue_student.bed.BedLinkEvents;
+import net.minecraft.block.entity.BlockEntityType;
 
 public class BlueStudentMod implements ModInitializer {
     public static final String MOD_ID = "blue_student";
@@ -30,12 +34,30 @@ public class BlueStudentMod implements ModInitializer {
                     .dimensions(EntityDimensions.fixed(0.6f, 1.8f))
                     .build()
     );
+    public static final Block ONLY_BED_BLOCK = Registry.register(
+            Registries.BLOCK,
+            new Identifier(MOD_ID, "only_bed"),
+            new OnlyBedBlock(AbstractBlock.Settings.create().strength(1.0f).nonOpaque())
+    );
+
+    public static final Item ONLY_BED_ITEM = Registry.register(
+            Registries.ITEM,
+            new Identifier(MOD_ID, "only_bed"),
+            new BlockItem(ONLY_BED_BLOCK, new Item.Settings().maxCount(64))
+    );
+
+    public static final BlockEntityType<OnlyBedBlockEntity> ONLY_BED_BE = Registry.register(
+            Registries.BLOCK_ENTITY_TYPE,
+            new Identifier(MOD_ID, "only_bed"),
+            BlockEntityType.Builder.create(OnlyBedBlockEntity::new, ONLY_BED_BLOCK).build(null)
+    );
 
     @Override
     public void onInitialize() {
         FabricDefaultAttributeRegistry.register(SHIROKO, ShirokoEntity.createAttributes());
         ModScreenHandlers.register();
         ModPackets.registerC2S();
+        BedLinkEvents.register(); // ★追加：ベッド置換イベント
     }
 
 

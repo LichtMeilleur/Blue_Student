@@ -31,6 +31,9 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
+import com.licht_meilleur.blue_student.bed.BedLinkManager;
+import com.licht_meilleur.blue_student.student.StudentId;
+import net.minecraft.item.ItemStack;
 
 import java.util.UUID;
 
@@ -141,6 +144,13 @@ public class ShirokoEntity extends PathAwareEntity implements GeoEntity {
             setOwnerUuid(player.getUuid());
         } else if (!ownerUuid.equals(player.getUuid())) {
             return ActionResult.PASS;
+        }
+        // ★ 空手 + しゃがみ右クリック：ベッド紐づけモード
+        ItemStack inHand = player.getStackInHand(hand);
+        if (player.isSneaking() && inHand.isEmpty()) {
+            BedLinkManager.setLinking(player.getUuid(), StudentId.SHIROKO);
+            player.sendMessage(Text.literal("Link mode: SHIROKO. Now sneak+rightclick a vanilla bed."), false);
+            return ActionResult.CONSUME;
         }
 
         if (player.isSneaking()) {
