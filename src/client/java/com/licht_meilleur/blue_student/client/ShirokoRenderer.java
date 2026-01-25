@@ -1,6 +1,6 @@
 package com.licht_meilleur.blue_student.client;
 
-import com.licht_meilleur.blue_student.ShirokoEntity;
+import com.licht_meilleur.blue_student.entity.ShirokoEntity;
 import net.minecraft.client.render.entity.EntityRendererFactory;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
 

@@ -1,7 +1,7 @@
 package com.licht_meilleur.blue_student.block;
 
 import com.licht_meilleur.blue_student.BlueStudentMod;
-import com.licht_meilleur.blue_student.ShirokoEntity;
+import com.licht_meilleur.blue_student.entity.ShirokoEntity;
 import com.licht_meilleur.blue_student.block.entity.TabletBlockEntity;
 import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;

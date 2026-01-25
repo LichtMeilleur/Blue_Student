@@ -1,5 +1,8 @@
 package com.licht_meilleur.blue_student;
 
+import com.licht_meilleur.blue_student.entity.ShirokoEntity;
+import com.licht_meilleur.blue_student.network.ModPackets;
+import com.licht_meilleur.blue_student.registry.ModScreenHandlers;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
 import net.minecraft.entity.EntityDimensions;
@@ -31,6 +34,8 @@ public class BlueStudentMod implements ModInitializer {
     @Override
     public void onInitialize() {
         FabricDefaultAttributeRegistry.register(SHIROKO, ShirokoEntity.createAttributes());
+        ModScreenHandlers.register();
+        ModPackets.registerC2S();
     }
 
 
@@ -53,4 +58,8 @@ public class BlueStudentMod implements ModInitializer {
             new Identifier(MOD_ID, "tablet"),
             BlockEntityType.Builder.create(TabletBlockEntity::new, TABLET_BLOCK).build(null)
     );
+
+    public static Identifier id(String path) {
+        return new Identifier(MOD_ID, path);
+    }
 }

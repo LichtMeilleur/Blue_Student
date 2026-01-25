@@ -1,7 +1,7 @@
 package com.licht_meilleur.blue_student.client;
 
 import com.licht_meilleur.blue_student.BlueStudentMod;
-import com.licht_meilleur.blue_student.ShirokoEntity;
+import com.licht_meilleur.blue_student.entity.ShirokoEntity;
 import net.minecraft.util.Identifier;
 import software.bernie.geckolib.model.GeoModel;
 
