@@ -1,0 +1,6 @@
+{
+	"variants": {
+		"half=lower": { "model": "blue_student:block/tablet" },
+		"half=upper": { "model": "blue_student:block/tablet" }
+	}
+}

@@ -1,0 +1,90 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.model.normal": {
+			"loop": true,
+			"bones": {
+				"bed": {
+					"position": {
+						"vector": [0, 0, 0]
+					}
+				}
+			}
+		},
+		"animation.model.sleep": {
+			"loop": true,
+			"bones": {
+				"MiddleUnderFuton": {
+					"rotation": {
+						"vector": [8, 0, 0]
+					},
+					"position": {
+						"vector": [0, 1.4, 1.8]
+					}
+				},
+				"MiddleFuton": {
+					"rotation": {
+						"vector": [12, 0, 0]
+					},
+					"position": {
+						"vector": [0, 1.5, 1.3]
+					}
+				},
+				"MiddleUpperFuton": {
+					"position": {
+						"vector": [0, 3.1, 0]
+					}
+				},
+				"RightUpperFuton": {
+					"rotation": {
+						"vector": [0, 0, -45]
+					},
+					"position": {
+						"vector": [0.4, 3.1, 0]
+					}
+				},
+				"RightFuton": {
+					"rotation": {
+						"vector": [2.33499, 2.50148, -25.59068]
+					},
+					"position": {
+						"vector": [0, 2.9, 0]
+					}
+				},
+				"RightUnderFuton": {
+					"rotation": {
+						"vector": [10.37955, 3.8217, -17.6492]
+					},
+					"position": {
+						"vector": [0, 1.8, 0.5]
+					}
+				},
+				"LeftUnderFuton": {
+					"rotation": {
+						"vector": [9.92695, -1.21261, 6.89469]
+					},
+					"position": {
+						"vector": [0, 1.1, 0]
+					}
+				},
+				"LeftFuton": {
+					"rotation": {
+						"vector": [11.5, 0, 27.5]
+					},
+					"position": {
+						"vector": [0, 3.2, 0]
+					}
+				},
+				"LeftUpperFuton": {
+					"rotation": {
+						"vector": [0, 0, 42.5]
+					},
+					"position": {
+						"vector": [-0.4, 3.4, 0]
+					}
+				}
+			}
+		}
+	},
+	"geckolib_format_version": 2
+}

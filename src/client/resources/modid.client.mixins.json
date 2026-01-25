@@ -1,0 +1,11 @@
+{
+	"required": true,
+	"package": "com.licht_meilleur.blue_student.client",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"com.licht_meilleur.blue_student.ExampleClientMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
