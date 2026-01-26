@@ -295,11 +295,6 @@
 							}
 						}
 					]
-				},
-				{
-					"name": "head_rocator",
-					"parent": "bed",
-					"pivot": [-0.4, 5.5, 20.5]
 				}
 			]
 		}

@@ -15,8 +15,4 @@ public class StudentPickupItemGoal extends Goal {
         return true;
     }
 
-    @Override
-    public void tick() {
-        student.tryPickupNearbyItems();
-    }
 }

@@ -3,6 +3,7 @@ package com.licht_meilleur.blue_student.block.entity;
 import com.licht_meilleur.blue_student.BlueStudentMod;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.enums.BedPart;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
 import net.minecraft.util.math.BlockPos;
@@ -16,6 +17,8 @@ import software.bernie.geckolib.core.animation.AnimationState;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.util.GeckoLibUtil;
+import net.minecraft.block.enums.BedPart;
+
 
 public class OnlyBedBlockEntity extends BlockEntity implements GeoBlockEntity {
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
@@ -76,16 +79,11 @@ public class OnlyBedBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     // ---- クライアント同期用
-    @Override
+
     public NbtCompound toInitialChunkDataNbt() {
         NbtCompound nbt = new NbtCompound();
         writeNbt(nbt);
         return nbt;
     }
 
-    @Nullable
-    @Override
-    public BlockEntityUpdateS2CPacket toUpdatePacket() {
-        return BlockEntityUpdateS2CPacket.create(this);
-    }
 }

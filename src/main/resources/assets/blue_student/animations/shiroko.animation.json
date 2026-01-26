@@ -300,7 +300,7 @@
 			}
 		},
 		"animation.model.shot": {
-			"animation_length": 0.125,
+			"animation_length": 0.1667,
 			"bones": {
 				"UpperBody": {
 					"rotation": {

@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "III",
+    "IDI",
+    " G "
+  ],
+  "key": {
+    "I": { "item": "minecraft:iron_ingot" },
+    "D": { "item": "minecraft:diamond" },
+    "G": { "item": "minecraft:grass_block" }
+  },
+  "result": {
+    "item": "blue_student:tablet",
+    "count": 1
+  }
+}
