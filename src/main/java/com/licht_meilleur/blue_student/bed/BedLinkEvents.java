@@ -72,7 +72,7 @@ public class BedLinkEvents {
 // 記録
             BedLinkManager.setBedPos(player.getUuid(), linking, footPos);
             BedLinkManager.clearLinking(player.getUuid());
-            player.sendMessage(Text.literal("Linked bed -> " + linking.asKey()), false);
+            player.sendMessage(Text.literal("Linked bed -> " + linking.asString()), false);
             return ActionResult.SUCCESS;
         });
     }

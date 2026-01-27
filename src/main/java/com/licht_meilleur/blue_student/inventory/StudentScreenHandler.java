@@ -1,7 +1,8 @@
 package com.licht_meilleur.blue_student.inventory;
 
-import com.licht_meilleur.blue_student.entity.ShirokoEntity;
 import com.licht_meilleur.blue_student.registry.ModScreenHandlers;
+import com.licht_meilleur.blue_student.student.IStudentEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.Inventory;
@@ -11,23 +12,25 @@ import net.minecraft.screen.slot.Slot;
 
 public class StudentScreenHandler extends ScreenHandler {
     private final Inventory studentInv;
-    public final ShirokoEntity entity;   // 画面表示用（HP/名前/矢印など）
+
+    // ★共通インターフェースで保持
+    public final IStudentEntity entity;   // クライアントではnullの場合あり
     public final int entityId;
 
-    private static final int SLOT_START_X = 30;
-    private static final int SLOT_START_Y = 72;
+    private static final int SLOT_START_X = 48;
+    private static final int SLOT_START_Y = 90;
     private static final int SLOT_SIZE = 18;
 
     // ===== サーバー側：本物のentity + 本物のinventory =====
-    public StudentScreenHandler(int syncId, PlayerInventory playerInv, ShirokoEntity entity) {
+    public StudentScreenHandler(int syncId, PlayerInventory playerInv, IStudentEntity entity) {
         this(syncId, playerInv, entity, entity.getStudentInventory());
     }
 
     // ===== クライアント側：entity(あれば) + ダミーinventory(9) =====
-    public StudentScreenHandler(int syncId, PlayerInventory playerInv, ShirokoEntity entity, Inventory inv9) {
+    public StudentScreenHandler(int syncId, PlayerInventory playerInv, IStudentEntity entity, Inventory inv9) {
         super(ModScreenHandlers.STUDENT_MENU, syncId);
         this.entity = entity;
-        this.entityId = (entity != null) ? entity.getId() : -1;
+        this.entityId = (entity instanceof Entity e) ? e.getId() : -1;
         this.studentInv = inv9;
 
         // student 3x3
@@ -38,29 +41,27 @@ public class StudentScreenHandler extends ScreenHandler {
             }
         }
 
-        // player inv
-        int playerInvX = 8;
-        int playerInvY = 140;
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                this.addSlot(new Slot(playerInv, col + row * 9 + 9, playerInvX + col * 18, playerInvY + row * 18));
-            }
-        }
+        // StudentScreenHandler の中：player inventory を消して hotbar だけ残す例
+        int hotbarX = 48;
+        int hotbarY = 256 - 24; // BG下端ギリギリに寄せる（好みで調整）
 
-        // hotbar
-        int hotbarY = playerInvY + 58;
         for (int col = 0; col < 9; col++) {
-            this.addSlot(new Slot(playerInv, col, playerInvX + col * 18, hotbarY));
+            this.addSlot(new Slot(playerInv, col, hotbarX + col * 18, hotbarY));
         }
+    }
+
+    /** クライアント側でも entity を引けるようにする（StudentScreen からも使える） */
+    public IStudentEntity resolveEntity(PlayerEntity player) {
+        if (entity != null) return entity;
+        Entity raw = player.getWorld().getEntityById(entityId);
+        return (raw instanceof IStudentEntity se) ? se : null;
     }
 
     @Override
     public boolean canUse(PlayerEntity player) {
-        if (entity != null) return entity.isAlive() && player.distanceTo(entity) < 8.0f;
-
-        // entityがnullの可能性に備える（安全策）
-        var e = player.getWorld().getEntityById(entityId);
-        return e != null && e.isAlive() && player.distanceTo(e) < 8.0f;
+        IStudentEntity se = resolveEntity(player);
+        if (!(se instanceof Entity e)) return false;
+        return e.isAlive() && player.distanceTo(e) < 8.0f;
     }
 
     @Override

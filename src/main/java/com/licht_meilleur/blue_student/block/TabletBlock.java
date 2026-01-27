@@ -1,6 +1,7 @@
 package com.licht_meilleur.blue_student.block;
 
 import com.licht_meilleur.blue_student.BlueStudentMod;
+import com.licht_meilleur.blue_student.client.ClientHooks;
 import com.licht_meilleur.blue_student.entity.ShirokoEntity;
 import com.licht_meilleur.blue_student.block.entity.TabletBlockEntity;
 import net.minecraft.block.*;
@@ -132,23 +133,17 @@ public class TabletBlock extends BlockWithEntity {
     public ActionResult onUse(BlockState state, World world, BlockPos pos,
                               PlayerEntity player, Hand hand, BlockHitResult hit) {
 
-        if (world.isClient) return ActionResult.SUCCESS;
-
-        // 上段クリックでも下段を基準に動作させる
         BlockPos basePos = state.get(HALF) == DoubleBlockHalf.UPPER ? pos.down() : pos;
 
-        // 右クリックでシロコ召喚（ひとまず単純）
-        if (world instanceof ServerWorld sw) {
-            ShirokoEntity e = BlueStudentMod.SHIROKO.create(sw);
-            if (e != null) {
-                double x = basePos.getX() + 0.5;
-                double y = basePos.getY() + 1.0;
-                double z = basePos.getZ() + 0.5;
-                e.refreshPositionAndAngles(x, y, z, player.getYaw(), 0f);
-                sw.spawnEntity(e);
+        if (!world.isClient) {
+            BlockEntity be = world.getBlockEntity(basePos);
+            if (be instanceof TabletBlockEntity tabletBe) {
+                player.openHandledScreen(tabletBe); // ★サーバー起点で開く
+                return ActionResult.CONSUME;
             }
         }
-
-        return ActionResult.CONSUME;
+        return ActionResult.SUCCESS;
     }
+
+
 }

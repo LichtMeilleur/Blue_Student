@@ -97,14 +97,20 @@ public class BlueStudentMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("[BlueStudent] onInitialize");
+        System.out.println("[BlueStudent] onInitialize start");
+        LOGGER.info("[BlueStudent] onInitialize start");
 
         FabricDefaultAttributeRegistry.register(SHIROKO, ShirokoEntity.createAttributes());
 
         ModScreenHandlers.register();
-        ModPackets.registerC2S();
-        BedLinkEvents.register();
 
+        System.out.println("[BlueStudent] before ModPackets.registerC2S");
+        LOGGER.info("[BlueStudent] before ModPackets.registerC2S");
+        ModPackets.registerC2S();
+        System.out.println("[BlueStudent] after ModPackets.registerC2S");
+        LOGGER.info("[BlueStudent] after ModPackets.registerC2S");
+
+        BedLinkEvents.register();
         com.licht_meilleur.blue_student.registry.ModItemGroups.register();
     }
 
