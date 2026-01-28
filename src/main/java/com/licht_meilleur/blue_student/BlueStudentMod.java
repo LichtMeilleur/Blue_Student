@@ -5,7 +5,9 @@ import com.licht_meilleur.blue_student.block.OnlyBedBlock;
 import com.licht_meilleur.blue_student.block.TabletBlock;
 import com.licht_meilleur.blue_student.block.entity.OnlyBedBlockEntity;
 import com.licht_meilleur.blue_student.block.entity.TabletBlockEntity;
+import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
 import com.licht_meilleur.blue_student.entity.ShirokoEntity;
+import com.licht_meilleur.blue_student.entity.projectile.StudentBulletEntity;
 import com.licht_meilleur.blue_student.item.OnlyBedItem;
 import com.licht_meilleur.blue_student.network.ModPackets;
 import com.licht_meilleur.blue_student.registry.ModScreenHandlers;
@@ -24,8 +26,11 @@ import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.function.Consumer;
 
 public class BlueStudentMod implements ModInitializer {
     public static final String MOD_ID = "blue_student";
@@ -40,7 +45,7 @@ public class BlueStudentMod implements ModInitializer {
             Registries.ENTITY_TYPE,
             id("shiroko"),
             FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, ShirokoEntity::new)
-                    .dimensions(EntityDimensions.fixed(0.6f, 1.8f))
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
                     .build()
     );
 
@@ -100,7 +105,8 @@ public class BlueStudentMod implements ModInitializer {
         System.out.println("[BlueStudent] onInitialize start");
         LOGGER.info("[BlueStudent] onInitialize start");
 
-        FabricDefaultAttributeRegistry.register(SHIROKO, ShirokoEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(SHIROKO, AbstractStudentEntity.createAttributes());
+
 
         ModScreenHandlers.register();
 
@@ -124,4 +130,15 @@ public class BlueStudentMod implements ModInitializer {
             case KISAKI -> KISAKI_BED_ITEM;
         };
     }
+    /** client側でだけセットされる。サーバーでは null のまま */
+    public static Consumer<BlockPos> OPEN_TABLET_SCREEN = null;
+    public static final EntityType<StudentBulletEntity> STUDENT_BULLET = Registry.register(
+            Registries.ENTITY_TYPE,
+            id("student_bullet"),
+            FabricEntityTypeBuilder.<StudentBulletEntity>create(SpawnGroup.MISC, StudentBulletEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(10)
+                    .build()
+    );
 }

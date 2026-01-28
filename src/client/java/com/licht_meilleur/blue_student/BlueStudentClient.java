@@ -1,7 +1,12 @@
 package com.licht_meilleur.blue_student;
 
-import com.licht_meilleur.blue_student.client.*;
-import com.licht_meilleur.blue_student.client.screen.TabletStudentScreen;
+import com.licht_meilleur.blue_student.client.OnlyBedRenderer;
+import com.licht_meilleur.blue_student.client.ShirokoRenderer;
+import com.licht_meilleur.blue_student.client.TabletBlockRenderer;
+import com.licht_meilleur.blue_student.client.projectile.BulletRenderer;
+import com.licht_meilleur.blue_student.client.screen.TabletScreen;
+import com.licht_meilleur.blue_student.client.StudentScreen;
+import com.licht_meilleur.blue_student.client.network.ClientPackets;
 import com.licht_meilleur.blue_student.registry.ModScreenHandlers;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
@@ -9,10 +14,14 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.minecraft.client.render.block.entity.BlockEntityRendererFactories;
 
+
 public class BlueStudentClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         System.out.println("[BlueStudent] onInitializeClient PRINT");
+
+        // ★順番が前後しても大丈夫なように、クライアント側でも必ず登録（ガード付き）
+        ModScreenHandlers.register();
 
         EntityRendererRegistry.register(BlueStudentMod.SHIROKO, ShirokoRenderer::new);
 
@@ -20,6 +29,11 @@ public class BlueStudentClient implements ClientModInitializer {
         BlockEntityRendererFactories.register(BlueStudentMod.ONLY_BED_BE, ctx -> new OnlyBedRenderer());
 
         HandledScreens.register(ModScreenHandlers.STUDENT_MENU, StudentScreen::new);
-        HandledScreens.register(ModScreenHandlers.TABLET_MENU,  TabletStudentScreen::new);
+
+        // ★タブレットは ScreenHandler じゃなく “Clientで直接Screen開く” 方式
+        BlueStudentMod.OPEN_TABLET_SCREEN = TabletScreen::open;
+
+        EntityRendererRegistry.register(BlueStudentMod.STUDENT_BULLET, ctx -> new BulletRenderer(ctx));
+        ClientPackets.registerS2C();
     }
 }

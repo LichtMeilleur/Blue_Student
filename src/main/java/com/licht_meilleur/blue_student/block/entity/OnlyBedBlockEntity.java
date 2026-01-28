@@ -3,11 +3,9 @@ package com.licht_meilleur.blue_student.block.entity;
 import com.licht_meilleur.blue_student.BlueStudentMod;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.enums.BedPart;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoBlockEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
@@ -17,13 +15,11 @@ import software.bernie.geckolib.core.animation.AnimationState;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.util.GeckoLibUtil;
-import net.minecraft.block.enums.BedPart;
-
 
 public class OnlyBedBlockEntity extends BlockEntity implements GeoBlockEntity {
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    // animation key（あなたのonly_for_bed.animation.jsonに合わせる）
+    // animation key（only_for_bed.animation.json）
     private static final RawAnimation NORMAL = RawAnimation.begin().thenLoop("animation.model.normal");
     private static final RawAnimation SLEEP  = RawAnimation.begin().thenLoop("animation.model.sleep");
 
@@ -48,6 +44,7 @@ public class OnlyBedBlockEntity extends BlockEntity implements GeoBlockEntity {
     private void sync() {
         if (world == null) return;
         BlockState state = getCachedState();
+        // ★BE同期：updateListeners + packetで確実に飛ばす
         world.updateListeners(pos, state, state, 3);
     }
 
@@ -65,7 +62,7 @@ public class OnlyBedBlockEntity extends BlockEntity implements GeoBlockEntity {
         return cache;
     }
 
-    // ---- NBT（ワールド保存用）
+    // ---- NBT（保存用）
     @Override
     protected void writeNbt(NbtCompound nbt) {
         super.writeNbt(nbt);
@@ -78,12 +75,17 @@ public class OnlyBedBlockEntity extends BlockEntity implements GeoBlockEntity {
         sleepAnim = nbt.getBoolean("SleepAnim");
     }
 
-    // ---- クライアント同期用
-
+    // ---- クライアント同期用（★ここが重要）
+    @Override
     public NbtCompound toInitialChunkDataNbt() {
         NbtCompound nbt = new NbtCompound();
         writeNbt(nbt);
         return nbt;
     }
 
+    @Nullable
+    @Override
+    public BlockEntityUpdateS2CPacket toUpdatePacket() {
+        return BlockEntityUpdateS2CPacket.create(this);
+    }
 }

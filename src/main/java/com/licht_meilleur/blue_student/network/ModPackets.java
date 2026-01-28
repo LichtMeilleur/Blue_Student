@@ -27,7 +27,7 @@ public class ModPackets {
     }
     public static final Identifier SET_AI_MODE  = BlueStudentMod.id("set_ai_mode");
     public static final Identifier CALL_STUDENT = BlueStudentMod.id("call_student");
-
+    public static final Identifier S2C_SHOT_FX = BlueStudentMod.id("s2c_shot_fx");
     // ★ 64にしたければ 64 にする
     private static final int COST_DIAMOND = 1;
 

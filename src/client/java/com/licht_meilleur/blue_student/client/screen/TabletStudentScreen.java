@@ -67,12 +67,12 @@ public class TabletStudentScreen extends Screen {
         this.x0 = (this.width - BG_W) / 2;
         this.y0 = (this.height - BG_H) / 2;
 
-        // Back → 選択画面に戻る
+        // Back（右下）
         addDrawableChild(ButtonWidget.builder(Text.literal("Back"), b -> {
             this.client.setScreen(new TabletScreen(tabletPos));
-        }).dimensions(x0 + 200, y0 + 228, 45, 18).build());
+        }).dimensions(x0 + 256 - 10 - 45, y0 + 228, 45, 18).build());
 
-        // Call
+        // Call（左下）
         addDrawableChild(ButtonWidget.builder(Text.literal("Call"), b -> {
             sendCall();
             this.close();

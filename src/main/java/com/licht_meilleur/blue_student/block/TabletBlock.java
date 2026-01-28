@@ -1,15 +1,11 @@
 package com.licht_meilleur.blue_student.block;
 
 import com.licht_meilleur.blue_student.BlueStudentMod;
-import com.licht_meilleur.blue_student.client.ClientHooks;
-import com.licht_meilleur.blue_student.entity.ShirokoEntity;
 import com.licht_meilleur.blue_student.block.entity.TabletBlockEntity;
 import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.SpawnReason;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.state.StateManager;
 import net.minecraft.state.property.EnumProperty;
 import net.minecraft.state.property.Properties;
@@ -19,7 +15,6 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldAccess;
@@ -29,10 +24,7 @@ import org.jetbrains.annotations.Nullable;
 public class TabletBlock extends BlockWithEntity {
     public static final EnumProperty<DoubleBlockHalf> HALF = Properties.DOUBLE_BLOCK_HALF;
 
-    // ざっくり “薄い板 + スタンド” みたいな当たり判定（好きに調整OK）
-    // 下段は床から 0~1 の範囲
     private static final VoxelShape LOWER_SHAPE = Block.createCuboidShape(2, 0, 2, 14, 16, 14);
-    // 上段は上のブロック1個ぶん（0~1の範囲で表現）
     private static final VoxelShape UPPER_SHAPE = Block.createCuboidShape(2, 0, 2, 14, 16, 14);
 
     public TabletBlock(Settings settings) {
@@ -48,13 +40,11 @@ public class TabletBlock extends BlockWithEntity {
     @Nullable
     @Override
     public BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
-        // BlockEntityは下段にだけ置く（上段はBEなし）
         return state.get(HALF) == DoubleBlockHalf.LOWER ? new TabletBlockEntity(pos, state) : null;
     }
 
     @Override
     public BlockRenderType getRenderType(BlockState state) {
-        // GeckoLibで描画するのでバニラモデルは消す（モデル/ブロックステートは登録のため最低限だけ用意）
         return BlockRenderType.INVISIBLE;
     }
 
@@ -65,7 +55,6 @@ public class TabletBlock extends BlockWithEntity {
 
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
-        // 当たり判定も同じでOK（すり抜けさせたいなら OUTLINEだけにしてCOLLISIONは空にしてもいい）
         return state.get(HALF) == DoubleBlockHalf.LOWER ? LOWER_SHAPE : UPPER_SHAPE;
     }
 
@@ -83,15 +72,15 @@ public class TabletBlock extends BlockWithEntity {
     public BlockState getPlacementState(ItemPlacementContext ctx) {
         BlockPos pos = ctx.getBlockPos();
         World world = ctx.getWorld();
-        // 上に1ブロック空きが必要
         if (pos.getY() >= world.getTopY() - 1) return null;
         if (!world.getBlockState(pos.up()).canReplace(ctx)) return null;
-
         return this.getDefaultState().with(HALF, DoubleBlockHalf.LOWER);
     }
 
     @Override
-    public void onPlaced(World world, BlockPos pos, BlockState state, @Nullable net.minecraft.entity.LivingEntity placer, net.minecraft.item.ItemStack itemStack) {
+    public void onPlaced(World world, BlockPos pos, BlockState state,
+                         @Nullable net.minecraft.entity.LivingEntity placer,
+                         net.minecraft.item.ItemStack itemStack) {
         super.onPlaced(world, pos, state, placer, itemStack);
         if (!world.isClient) {
             world.setBlockState(pos.up(), state.with(HALF, DoubleBlockHalf.UPPER), Block.NOTIFY_ALL);
@@ -100,7 +89,6 @@ public class TabletBlock extends BlockWithEntity {
 
     @Override
     public void onBreak(World world, BlockPos pos, BlockState state, PlayerEntity player) {
-        // 片方壊したら両方消す
         DoubleBlockHalf half = state.get(HALF);
         BlockPos otherPos = (half == DoubleBlockHalf.LOWER) ? pos.up() : pos.down();
         BlockState other = world.getBlockState(otherPos);
@@ -111,11 +99,11 @@ public class TabletBlock extends BlockWithEntity {
     }
 
     @Override
-    public BlockState getStateForNeighborUpdate(BlockState state, net.minecraft.util.math.Direction dir, BlockState neighborState,
-                                                WorldAccess world, BlockPos pos, BlockPos neighborPos) {
+    public BlockState getStateForNeighborUpdate(BlockState state, net.minecraft.util.math.Direction dir,
+                                                BlockState neighborState, WorldAccess world,
+                                                BlockPos pos, BlockPos neighborPos) {
         DoubleBlockHalf half = state.get(HALF);
 
-        // 上下関係が崩れたら自壊
         if (dir == net.minecraft.util.math.Direction.UP && half == DoubleBlockHalf.LOWER) {
             if (!neighborState.isOf(this) || neighborState.get(HALF) != DoubleBlockHalf.UPPER) {
                 return Blocks.AIR.getDefaultState();
@@ -135,15 +123,15 @@ public class TabletBlock extends BlockWithEntity {
 
         BlockPos basePos = state.get(HALF) == DoubleBlockHalf.UPPER ? pos.down() : pos;
 
-        if (!world.isClient) {
-            BlockEntity be = world.getBlockEntity(basePos);
-            if (be instanceof TabletBlockEntity tabletBe) {
-                player.openHandledScreen(tabletBe); // ★サーバー起点で開く
-                return ActionResult.CONSUME;
+        if (world.isClient) {
+            // ★共通→client 直参照はしない。clientがセットしたコールバックを叩く
+            if (BlueStudentMod.OPEN_TABLET_SCREEN != null) {
+                BlueStudentMod.OPEN_TABLET_SCREEN.accept(basePos);
             }
+            return ActionResult.SUCCESS;
         }
-        return ActionResult.SUCCESS;
-    }
 
+        return ActionResult.CONSUME;
+    }
 
 }
