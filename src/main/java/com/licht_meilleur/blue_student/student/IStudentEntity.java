@@ -28,6 +28,10 @@ public interface IStudentEntity {
     boolean isReloading();
     void startReload(WeaponSpec spec);
     void tickReload(WeaponSpec spec);
+    void queueFire(LivingEntity target);
+    LivingEntity consumeQueuedFireTarget(); // 取ったら消える
+    boolean hasQueuedFire();
+
 
     // ===== animation / presentation hooks =====
     default void requestShot() {}

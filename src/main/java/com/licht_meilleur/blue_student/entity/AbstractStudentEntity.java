@@ -11,10 +11,13 @@ import com.licht_meilleur.blue_student.student.StudentId;
 import com.licht_meilleur.blue_student.student.StudentLifeState;
 import com.licht_meilleur.blue_student.weapon.WeaponSpec;
 import com.licht_meilleur.blue_student.weapon.WeaponSpecs;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.ai.pathing.PathNodeType;
 import net.minecraft.entity.attribute.DefaultAttributeContainer;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
@@ -103,6 +106,8 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     protected int ammoInMag = 0;
     protected int reloadTicksLeft = 0;
     protected boolean ammoInitDone = false;
+
+    private UUID queuedFireTargetUuid = null;
 
     public static DefaultAttributeContainer.Builder createAttributes() {
         return PathAwareEntity.createMobAttributes()
@@ -412,6 +417,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         if (be instanceof OnlyBedBlockEntity obe) obe.setSleepAnim(true);
     }
 
+
     // ===== ammo api =====
     @Override public int getAmmoInMag() { return ammoInMag; }
 
@@ -498,4 +504,44 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         // 体格で微調整：前0.6m + 右0.18m + 少し下
         return eye.add(look.multiply(0.60)).add(right.multiply(0.18)).add(0, -0.10, 0);
     }
+
+    // client-only: レンダラーが毎フレーム更新する
+    @Environment(EnvType.CLIENT)
+    private Vec3d clientMuzzleWorldPos = null;
+
+    @Environment(EnvType.CLIENT)
+    public void setClientMuzzleWorldPos(Vec3d pos) { this.clientMuzzleWorldPos = pos; }
+
+    @Environment(EnvType.CLIENT)
+    public Vec3d getClientMuzzleWorldPosOrApprox() {
+        return (clientMuzzleWorldPos != null) ? clientMuzzleWorldPos : getMuzzlePosApprox();
+    }
+    public PlayerEntity getOwnerPlayer() {
+        if (ownerUuid == null) return null;
+        return this.getWorld().getPlayerByUuid(ownerUuid);
+    }
+    @Override
+    public void queueFire(LivingEntity target) {
+        if (getWorld().isClient) return;
+        if (target == null) return;
+        queuedFireTargetUuid = target.getUuid();
+    }
+
+    @Override
+    public boolean hasQueuedFire() {
+        return queuedFireTargetUuid != null;
+    }
+
+    @Override
+    public LivingEntity consumeQueuedFireTarget() {
+        if (getWorld().isClient) return null;
+        if (queuedFireTargetUuid == null) return null;
+
+        var w = (ServerWorld) getWorld();
+        var e = w.getEntity(queuedFireTargetUuid);
+        queuedFireTargetUuid = null;
+
+        return (e instanceof LivingEntity le) ? le : null;
+    }
+
 }

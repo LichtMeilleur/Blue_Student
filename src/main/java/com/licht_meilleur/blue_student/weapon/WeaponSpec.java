@@ -31,6 +31,15 @@ public class WeaponSpec {
     public final double panicRange;
     public final boolean infiniteAmmo;
 
+    public enum FxType {
+        BULLET,     // 普通の弾
+        SHOTGUN,    // 散弾
+        RAILGUN     // 太ビーム
+    }
+    public final FxType fxType;
+    public final float fxWidth;
+    // レールガン太さ用（散弾/通常は0でOK）
+
     public WeaponSpec(
             Type type,
             double range,
@@ -47,7 +56,9 @@ public class WeaponSpec {
             int reloadTicks,
             int reloadStartAmmo,
             double panicRange,
-            boolean infiniteAmmo
+            boolean infiniteAmmo,
+            FxType fxType,
+            float fxWidth
 
     ) {
         this.type = type;
@@ -66,6 +77,8 @@ public class WeaponSpec {
         this.reloadStartAmmo = reloadStartAmmo;
         this.panicRange = panicRange;
         this.infiniteAmmo = infiniteAmmo;
+        this.fxType = fxType;
+        this.fxWidth = fxWidth;
 
     }
 
@@ -78,10 +91,12 @@ public class WeaponSpec {
             int reloadTicks,
             int reloadStartAmmo,
             double panicRange,
-            boolean infiniteAmmo
+            boolean infiniteAmmo,
+            FxType fxType,
+            float fxWidth
     ) {
         return new WeaponSpec(Type.PROJECTILE, range, cooldownTicks, damage,
-                projectileSpeed, spreadRad, pellets, knockback, bypassIFrames,preferredMinRange,preferredMaxRange, magSize, reloadTicks, reloadStartAmmo, panicRange,infiniteAmmo);
+                projectileSpeed, spreadRad, pellets, knockback, bypassIFrames,preferredMinRange,preferredMaxRange, magSize, reloadTicks, reloadStartAmmo, panicRange,infiniteAmmo,fxType,fxWidth);
     }
     public static WeaponSpec hitscan(
             double range, int cooldownTicks, float damage,
@@ -92,9 +107,13 @@ public class WeaponSpec {
             int reloadTicks,
             int reloadStartAmmo,
             double panicRange,
-            boolean infiniteAmmo
+            boolean infiniteAmmo,
+            FxType fxType,
+            float fxWidth
     ) {
         return new WeaponSpec(Type.HITSCAN, range, cooldownTicks, damage,
-                projectileSpeed, spreadRad, pellets, knockback, bypassIFrames,preferredMinRange,preferredMaxRange, magSize, reloadTicks, reloadStartAmmo, panicRange,infiniteAmmo);
+                projectileSpeed, spreadRad, pellets, knockback, bypassIFrames,preferredMinRange,preferredMaxRange, magSize, reloadTicks, reloadStartAmmo, panicRange,infiniteAmmo,fxType,fxWidth);
     }
+
+
 }

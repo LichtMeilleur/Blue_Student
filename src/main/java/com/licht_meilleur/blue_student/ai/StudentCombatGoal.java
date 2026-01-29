@@ -2,10 +2,7 @@ package com.licht_meilleur.blue_student.ai;
 
 import com.licht_meilleur.blue_student.student.IStudentEntity;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
-import com.licht_meilleur.blue_student.weapon.ProjectileWeaponAction;
-import com.licht_meilleur.blue_student.weapon.WeaponAction;
-import com.licht_meilleur.blue_student.weapon.WeaponSpec;
-import com.licht_meilleur.blue_student.weapon.WeaponSpecs;
+import com.licht_meilleur.blue_student.weapon.*;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.ai.FuzzyTargeting;
@@ -28,6 +25,7 @@ public class StudentCombatGoal extends Goal {
     private final IStudentEntity student;
 
     private final WeaponAction projectileAction = new ProjectileWeaponAction();
+    private final WeaponAction hitscanAction = new HitscanWeaponAction();
 
     private float cooldown = 0f;
     private LivingEntity target;
@@ -172,23 +170,33 @@ public class StudentCombatGoal extends Goal {
         }
 
         // =========================================================
-        // ★射撃
-        // =========================================================
+// ★射撃（照準は毎tick維持）
+// =========================================================
         mob.getNavigation().stop();
-        mob.getLookControl().lookAt(target, 30, 30); // 撃つ時だけ敵を見る
 
+// 目線を狙う（自然）
+        double tx = target.getX();
+        double ty = target.getEyeY();
+        double tz = target.getZ();
+
+// 追従の速さ：左右/上下（ここが“向くスピード”）
+        float yawSpeed = 70.0f;   // 30→70くらいが体感良いこと多い
+        float pitchSpeed = 70.0f;
+
+        mob.getLookControl().lookAt(tx, ty, tz, yawSpeed, pitchSpeed);
+
+// ここでは実射撃しない（AimFireGoalに任せる）
         if (cooldown > 0) return;
 
-        boolean fired = switch (spec.type) {
-            case PROJECTILE -> projectileAction.shoot(student, target, spec);
-            case HITSCAN -> false;
-        };
+// ★撃ちたい意思だけキュー
+        student.queueFire(target);
 
-        if (fired) {
-            cooldown = spec.cooldownTicks;
-            student.requestShot(target);                 // ★追加：shotトリガー
-            if (!spec.infiniteAmmo) student.consumeAmmo(1);
-        }
+// 連射間隔はCombat側で管理（今まで通り）
+        cooldown = spec.cooldownTicks;
+
+        return;
+
+
 
 
     }

@@ -41,7 +41,8 @@ public class StudentEvadeGoal extends Goal {
     public StudentEvadeGoal(PathAwareEntity mob, IStudentEntity student) {
         this.mob = mob;
         this.student = student;
-        this.setControls(EnumSet.of(Control.MOVE, Control.LOOK));
+        this.setControls(EnumSet.of(Control.MOVE)); // LOOKを外す
+
     }
 
     @Override
@@ -105,13 +106,19 @@ public class StudentEvadeGoal extends Goal {
         if (away.lengthSquared() < 1.0e-6) return;
         away = away.normalize();
 
-        // 逃げ方向へ向く
-        mob.getLookControl().lookAt(
-                mob.getX() + away.x * 2.0,
-                mob.getEyeY(),
-                mob.getZ() + away.z * 2.0,
-                90.0f, 90.0f
-        );
+        // tick() 内：away を作った直後あたりに入れる
+        float moveYaw = (float)(Math.toDegrees(Math.atan2(away.z, away.x)) - 90.0);
+        mob.setYaw(approachAngle(mob.getYaw(), moveYaw, 30.0f));
+
+// headYaw が触れるなら揃える（触れないならこの行は消す）
+        mob.setHeadYaw(mob.getYaw());
+
+
+        // 逃げ方向（away）へ“体”を向ける（見た目が一番自然）
+        mob.setYaw(approachAngle(mob.getYaw(), moveYaw, 30.0f));
+        mob.bodyYaw = mob.getYaw();
+        mob.headYaw = mob.getYaw();
+
 
         // ステップは間隔を置く（連打しすぎると挙動が不安定）
         if (stepCooldown == 0) {
@@ -176,13 +183,12 @@ public class StudentEvadeGoal extends Goal {
 
         if (bestDir == null) return false;
 
-        // 向きは回避方向
-        mob.getLookControl().lookAt(
-                mob.getX() + bestDir.x * 2.0,
-                mob.getEyeY(),
-                mob.getZ() + bestDir.z * 2.0,
-                90, 90
-        );
+        // 向きは回避方向（LOOKではなくYawで統一）
+        float moveYaw = (float)(Math.toDegrees(Math.atan2(bestDir.z, bestDir.x)) - 90.0);
+        mob.setYaw(approachAngle(mob.getYaw(), moveYaw, 45.0f));
+        mob.bodyYaw = mob.getYaw();
+        mob.headYaw = mob.getYaw();
+
 
         // ★シュッとステップ
         mob.setVelocity(bestDir.x * STEP_SPEED, mob.getVelocity().y, bestDir.z * STEP_SPEED);
@@ -281,6 +287,12 @@ public class StudentEvadeGoal extends Goal {
         if (!w.getFluidState(below).isEmpty() && w.getFluidState(below).isOf(Fluids.LAVA)) return true;
 
         return false;
+    }
+    private float approachAngle(float cur, float target, float maxStep) {
+        float delta = net.minecraft.util.math.MathHelper.wrapDegrees(target - cur);
+        if (delta > maxStep) delta = maxStep;
+        if (delta < -maxStep) delta = -maxStep;
+        return cur + delta;
     }
 
 

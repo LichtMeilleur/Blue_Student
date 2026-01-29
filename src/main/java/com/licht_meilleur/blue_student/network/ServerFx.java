@@ -12,7 +12,7 @@ import net.minecraft.util.math.MathHelper;
 import io.netty.buffer.Unpooled;
 
 public class ServerFx {
-    public static final Identifier SHOT_FX = BlueStudentMod.id("shot_fx");
+    public static final Identifier S2C_SHOT_FX = BlueStudentMod.id("s2c_shot_fx");
 
     public static void sendShotFx(ServerWorld sw, int shooterEntityId, Vec3d spawnPos, Vec3d dir) {
         PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
@@ -28,7 +28,7 @@ public class ServerFx {
         buf.writeFloat((float) nd.z);
 
         for (var p : PlayerLookup.world(sw)) {
-            ServerPlayNetworking.send(p, SHOT_FX, buf);
+            ServerPlayNetworking.send(p, ModPackets.S2C_SHOT_FX, buf);
         }
     }
 }

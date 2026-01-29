@@ -56,17 +56,28 @@ public class ShirokoEntity extends AbstractStudentEntity {
 
     @Override
     protected void initGoals() {
+        this.goalSelector.add(0, new StudentAimFireGoal(this, this));
         this.goalSelector.add(1, new StudentStuckEscapeGoal(this, this));
         this.goalSelector.add(2, new EscapeDangerGoal(this, 1.25));
-
+        this.goalSelector.add(3,
+                new StudentReturnToOwnerGoal(this, this,
+                        1.35,   // speed（追いつけるよう少し速め）
+                        28.0,   // triggerDist
+                        2.5,    // stopDist（2〜3ブロ）
+                        48.0,   // teleportDist（48以上で救済）
+                        20      // stuckTriggerTicks（1秒くらい）
+                ));
         // 逃げAI（安定）
-        this.goalSelector.add(3, new net.minecraft.entity.ai.goal.FleeEntityGoal<>(
+        this.goalSelector.add(4, new net.minecraft.entity.ai.goal.FleeEntityGoal<>(
                 this, HostileEntity.class, 8.0f, 1.0, 1.35
         ));
 
-        this.goalSelector.add(4, new StudentCombatGoal(this, this));
-        this.goalSelector.add(5, new StudentFollowGoal(this, this, 1.1));
-        this.goalSelector.add(6, new StudentSecurityGoal(this, this,
+
+        this.goalSelector.add(5, new StudentCombatGoal(this, this));
+
+
+        this.goalSelector.add(6, new StudentFollowGoal(this, this, 1.1));
+        this.goalSelector.add(7, new StudentSecurityGoal(this, this,
                 new StudentSecurityGoal.ISecurityPosProvider() {
                     @Override public BlockPos getSecurityPos() { return ShirokoEntity.this.getSecurityPos(); }
                     @Override public void setSecurityPos(BlockPos pos) { ShirokoEntity.this.setSecurityPos(pos); }

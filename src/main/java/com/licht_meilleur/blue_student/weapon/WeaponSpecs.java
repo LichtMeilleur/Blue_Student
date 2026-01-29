@@ -9,21 +9,23 @@ public class WeaponSpecs {
 
             // シロコ：遠距離 標準AR想定
             case SHIROKO -> WeaponSpec.projectile(
-                    16,
-                    2,
-                    1.2f,
-                    3.0f,
-                    0.04f,
-                    1,
+                    16, // range
+                    2,// cooldownTicks
+                    1.2f, // damage
+                    3.0f,       // projectileSpeed
+                    0.04f, // spreadRad
+                    1,// pellets
                     0.0f,   // ノックバック無し
-                    true,
+                    true,// bypassIFrames
                     8.0,    // preferredMinRange
                     14.0,    // preferredMaxRange
                     30,             // magSize
                     20,             // reloadTicks
                     0,              // reloadStartAmmo
                     5.0,    // panicRange
-                    false
+                    false,          // infiniteAmmo
+                    WeaponSpec.FxType.BULLET,   // fxType
+                    1.0f    // fxWidth
             );
 
             // ホシノ：近〜中距離 ショットガン想定（散弾）
@@ -42,7 +44,9 @@ public class WeaponSpecs {
                     43,             // reloadTicks
                     0,              // reloadStartAmmo
                     4.0,            // panicRange
-                    false           // infiniteAmmo
+                    false,           // infiniteAmmo
+                    WeaponSpec.FxType.SHOTGUN,   // fxType
+                    3.0f    // fxWidth
             );
 
             // ヒナ：遠距離 高レート
@@ -61,7 +65,9 @@ public class WeaponSpecs {
                     24,             // reloadTicks
                     0,              // reloadStartAmmo
                     5.0,
-                    false
+                    false,           // infiniteAmmo
+                    WeaponSpec.FxType.BULLET,   // fxType
+                    1.0f    // fxWidth
             );
 
             // キサキ：中〜遠距離（命中寄り）
@@ -80,26 +86,30 @@ public class WeaponSpecs {
                     37,             // reloadTicks
                     0,              // reloadStartAmmo
                     5.0,
-                    false
+                    false,           // infiniteAmmo
+                    WeaponSpec.FxType.BULLET,   // fxType
+                    1.0f    // fxWidth
             );
 
             // アリス：遠距離 高ダメ（後でレールガンに変更しやすい）
-            case ALICE -> WeaponSpec.projectile(
+            case ALICE -> WeaponSpec.hitscan(
                     40,
-                    60,      // cooldownTicks 長め（=チャージ間隔扱い）
+                    60,
                     18f,
-                    3.5f,    // projectileSpeed 遅め
+                    0f,     // projectileSpeedは使わない（hitscan）
                     0f,
                     1,
                     1.5f,
                     true,
                     10.0,
                     18.0,
-                    1,       // magSize
-                    0,       // reloadTicks
-                    0,       // reloadStartAmmo
-                    6.0,     // panicRange
-                    true     // infiniteAmmo
+                    1,
+                    0,
+                    0,
+                    6.0,
+                    true,           // infiniteAmmo
+                    WeaponSpec.FxType.RAILGUN,   // fxType
+                    2.0f    // fxWidth
             );
         };
     }
