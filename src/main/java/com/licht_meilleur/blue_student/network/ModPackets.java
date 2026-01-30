@@ -66,9 +66,20 @@ public class ModPackets {
                 ServerWorld sw = player.getServerWorld();
                 StudentWorldState state = StudentWorldState.get(sw);
 
-                // ===== 重複チェック（世界唯一）=====
-                if (state.hasStudent()) {
-                    player.sendMessage(Text.literal("Already summoned."), false);
+
+                // ===== sid parse =====
+                final StudentId sid;
+                try {
+                    sid = parseStudentId(sidStr);
+                } catch (Exception ex) {
+                    player.sendMessage(Text.literal("Unknown student: " + sidStr), false);
+                    return;
+                }
+
+
+                // ===== 重複チェック（各生徒IDで世界唯一）=====
+                if (state.hasStudent(sid)) {
+                    player.sendMessage(Text.literal("Already summoned: " + sid.asString()), false);
                     return;
                 }
 
@@ -80,21 +91,14 @@ public class ModPackets {
                     }
                 }
 
-                // ===== sid parse =====
-                final StudentId sid;
-                try {
-                    sid = parseStudentId(sidStr);
-                } catch (Exception ex) {
-                    player.sendMessage(Text.literal("Unknown student: " + sidStr), false);
-                    return;
-                }
+
 
                 // ===== spawn entity (sidで切替) =====
                 Entity raw = switch (sid) {
                     case SHIROKO -> BlueStudentMod.SHIROKO.create(sw);
 
                     // ↓ 他生徒を作ったらここを差し替える
-                    // case HOSHINO -> BlueStudentMod.HOSHINO.create(sw);
+                     case HOSHINO -> BlueStudentMod.HOSHINO.create(sw);
                     // case HINA    -> BlueStudentMod.HINA.create(sw);
                     // case ALICE   -> BlueStudentMod.ALICE.create(sw);
                     // case KISAKI  -> BlueStudentMod.KISAKI.create(sw);
@@ -126,7 +130,8 @@ public class ModPackets {
                 sw.spawnEntity(e);
 
                 // 世界唯一としてUUID保存
-                state.setStudent(e.getUuid());
+                state.setStudent(sid, e.getUuid());
+
 
                 player.sendMessage(Text.literal("Summoned: " + sid.asString()), false);
             });

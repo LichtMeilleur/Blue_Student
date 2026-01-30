@@ -14,6 +14,8 @@ import net.minecraft.state.property.EnumProperty;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldAccess;
 import net.minecraft.world.WorldView;
@@ -25,6 +27,9 @@ public class OnlyBedBlock extends BlockWithEntity {
 
     public static final EnumProperty<StudentId> STUDENT =
             EnumProperty.of("student", StudentId.class);
+
+    private static final VoxelShape BED_SHAPE =
+            Block.createCuboidShape(0.0, 0.0, 0.0, 16.0, 9.0, 16.0); // 9/16 高さ（バニラ寄せ）
 
     public OnlyBedBlock(Settings settings) {
         super(settings);
@@ -70,21 +75,18 @@ public class OnlyBedBlock extends BlockWithEntity {
     public BlockState getStateForNeighborUpdate(BlockState state, Direction dir,
                                                 BlockState neighborState, WorldAccess world,
                                                 BlockPos pos, BlockPos neighborPos) {
-        BedPart part = state.get(PART);
-        Direction facing = state.get(FACING);
 
-        if (part == BedPart.FOOT && dir == facing) {
-            if (!neighborState.isOf(this) || neighborState.get(PART) != BedPart.HEAD) {
-                return Blocks.AIR.getDefaultState();
-            }
+        // ★相方が存在しないなら自分も消える（dir/neighborPosに依存しない）
+        BlockPos other = findOtherHalfPos(world, pos, state);
+        if (other == null) {
+            return Blocks.AIR.getDefaultState();
         }
-        if (part == BedPart.HEAD && dir == facing.getOpposite()) {
-            if (!neighborState.isOf(this) || neighborState.get(PART) != BedPart.FOOT) {
-                return Blocks.AIR.getDefaultState();
-            }
-        }
-        return super.getStateForNeighborUpdate(state, dir, neighborState, world, pos, neighborPos);
+
+        return state; // superに行かずそのまま保持が安全
     }
+
+
+
 
     /**
      * ★相方座標を「両候補チェック」で確実に取得する
@@ -148,5 +150,15 @@ public class OnlyBedBlock extends BlockWithEntity {
             StudentId sid = state.get(STUDENT);
             dropStack(world, pos, new ItemStack(BlueStudentMod.getBedItemFor(sid)));
         }
+    }
+
+    @Override
+    public VoxelShape getCollisionShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
+        return BED_SHAPE;
+    }
+
+    @Override
+    public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
+        return BED_SHAPE;
     }
 }

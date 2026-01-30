@@ -1,35 +1,33 @@
 package com.licht_meilleur.blue_student.client;
 
 import com.licht_meilleur.blue_student.BlueStudentMod;
-import com.licht_meilleur.blue_student.entity.ShirokoEntity;
+import com.licht_meilleur.blue_student.entity.HoshinoEntity;
 import net.minecraft.util.Identifier;
-import software.bernie.geckolib.model.GeoModel;
-
-import software.bernie.geckolib.core.animation.AnimationState;
-import software.bernie.geckolib.core.animatable.model.CoreGeoBone;
-import software.bernie.geckolib.core.object.DataTicket;
 import software.bernie.geckolib.constant.DataTickets;
+import software.bernie.geckolib.core.animatable.model.CoreGeoBone;
+import software.bernie.geckolib.core.animation.AnimationState;
+import software.bernie.geckolib.model.GeoModel;
 import software.bernie.geckolib.model.data.EntityModelData;
 
-public class ShirokoModel extends GeoModel<ShirokoEntity> {
+public class HoshinoModel extends GeoModel<HoshinoEntity> {
 
     @Override
-    public Identifier getModelResource(ShirokoEntity animatable) {
-        return new Identifier(BlueStudentMod.MOD_ID, "geo/shiroko.geo.json");
+    public Identifier getModelResource(HoshinoEntity animatable) {
+        return new Identifier(BlueStudentMod.MOD_ID, "geo/hoshino.geo.json");
     }
 
     @Override
-    public Identifier getTextureResource(ShirokoEntity animatable) {
-        return new Identifier(BlueStudentMod.MOD_ID, "textures/entity/shiroko.png");
+    public Identifier getTextureResource(HoshinoEntity animatable) {
+        return new Identifier(BlueStudentMod.MOD_ID, "textures/entity/hoshino.png");
     }
 
     @Override
-    public Identifier getAnimationResource(ShirokoEntity animatable) {
-        return new Identifier(BlueStudentMod.MOD_ID, "animations/shiroko.animation.json");
+    public Identifier getAnimationResource(HoshinoEntity animatable) {
+        return new Identifier(BlueStudentMod.MOD_ID, "animations/hoshino.animation.json");
     }
 
     @Override
-    public void setCustomAnimations(ShirokoEntity animatable, long instanceId, AnimationState<ShirokoEntity> animationState) {
+    public void setCustomAnimations(HoshinoEntity animatable, long instanceId, AnimationState<HoshinoEntity> animationState) {
         super.setCustomAnimations(animatable, instanceId, animationState);
 
         CoreGeoBone head = this.getAnimationProcessor().getBone("Head");

@@ -39,11 +39,12 @@ public class StudentCombatGoal extends Goal {
     // SECURITY中：警備地点からの最大離脱距離
     private static final double GUARD_RADIUS = 16.0;
 
-    // 位置取り用
-    private int repositionCooldown = 0;
+    private int noActionTicks = 0;
     private Vec3d lastPos = Vec3d.ZERO;
-    private int noMoveTicks = 0;
-    private boolean preferLeftWall = true; // ★壁沿い回避用
+
+    private static final int FORCE_FIRE_TICKS = 10; // 20〜30で好み
+    private static final double STILL_EPS2 = 0.0003; // 動いてない判定
+
 
     public StudentCombatGoal(PathAwareEntity mob, IStudentEntity student) {
         this.mob = mob;
@@ -193,6 +194,49 @@ public class StudentCombatGoal extends Goal {
 
 // 連射間隔はCombat側で管理（今まで通り）
         cooldown = spec.cooldownTicks;
+
+
+        boolean inRange = dist <= spec.range;
+        boolean standing =
+                mob.getNavigation().isIdle() &&
+                        mob.getVelocity().horizontalLengthSquared() < 0.0002 &&
+                        mob.getPos().squaredDistanceTo(lastPos) < STILL_EPS2;
+
+        lastPos = mob.getPos();
+
+// 「撃った／回避した／追いかけた」など、行動したならここで noActionTicks をリセットしたい
+        boolean didSomethingThisTick = false;
+
+// 例：あなたのコードで fired が取れるならそれでOK
+// didSomethingThisTick |= fired;
+
+// 例：ナビが動いてたら「行動中」とみなす
+        if (!mob.getNavigation().isIdle()) didSomethingThisTick = true;
+
+// 例：速度があるなら移動中
+        if (mob.getVelocity().horizontalLengthSquared() > 0.002) didSomethingThisTick = true;
+
+        if (inRange && standing && !didSomethingThisTick) {
+            noActionTicks++;
+        } else {
+            noActionTicks = 0;
+        }
+
+// ★一定tick棒立ちなら “強制攻撃”
+        if (noActionTicks >= FORCE_FIRE_TICKS) {
+            noActionTicks = 0;
+
+            mob.getNavigation().stop();
+            mob.getLookControl().lookAt(target, 200.0f, 200.0f); // 速めでOK
+
+            // A案：キュー方式なら
+            student.queueFire(target);
+            student.requestShot(target); // モーションだけ先に出したいなら
+
+            // B案：ここで実射撃してしまうなら（今のWeaponActionを呼ぶ）
+            // boolean fired2 = switch (spec.type) {...};
+            // if (fired2) cooldown = spec.cooldownTicks;
+        }
 
         return;
 

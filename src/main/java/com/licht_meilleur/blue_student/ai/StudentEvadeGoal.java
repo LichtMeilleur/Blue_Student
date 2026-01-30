@@ -32,7 +32,7 @@ public class StudentEvadeGoal extends Goal {
     private static final int EVADE_DURATION = 10;      // 回避状態の維持tick
     private static final int STEP_COOLDOWN = 6;        // ステップ間隔
     private static final double STEP_DIST = 3;       // ステップ距離（短距離回避）
-    private static final double STEP_SPEED = 2;     // 速度（大きいほどシュッ）
+    private static final double STEP_SPEED = 3;     // 速度（大きいほどシュッ）
     private static final double MAX_DROP = 2.0;        // 戦闘中は2ブロック以上落ちない
 
     // SECURITY中：警備地点からの最大離脱
@@ -78,9 +78,9 @@ public class StudentEvadeGoal extends Goal {
         evadeTicks = EVADE_DURATION;
         stepCooldown = 0;
 
-        if (mob instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity se) {
-            se.requestDodge();
-        }
+        //f (mob instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity se) {
+          //  se.requestDodge();
+        //}
     }
 
     @Override
@@ -193,6 +193,11 @@ public class StudentEvadeGoal extends Goal {
         // ★シュッとステップ
         mob.setVelocity(bestDir.x * STEP_SPEED, mob.getVelocity().y, bestDir.z * STEP_SPEED);
         mob.velocityDirty = true;
+
+        // ★ここでDODGEアニメ（ステップが発生した瞬間）
+        if (mob instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity se) {
+            se.requestDodge();
+        }
 
         mob.getNavigation().startMovingTo(bestPos.x, bestPos.y, bestPos.z, 1.2);
         return true;

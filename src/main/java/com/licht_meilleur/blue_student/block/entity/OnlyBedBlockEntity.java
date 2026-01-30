@@ -6,6 +6,7 @@ import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.server.world.ServerWorld;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoBlockEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
@@ -44,9 +45,9 @@ public class OnlyBedBlockEntity extends BlockEntity implements GeoBlockEntity {
     private void sync() {
         if (world == null) return;
         BlockState state = getCachedState();
-        // ★BE同期：updateListeners + packetで確実に飛ばす
         world.updateListeners(pos, state, state, 3);
     }
+
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
@@ -54,7 +55,9 @@ public class OnlyBedBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     private PlayState predicate(AnimationState<OnlyBedBlockEntity> state) {
+
         return state.setAndContinue(this.sleepAnim ? SLEEP : NORMAL);
+
     }
 
     @Override
