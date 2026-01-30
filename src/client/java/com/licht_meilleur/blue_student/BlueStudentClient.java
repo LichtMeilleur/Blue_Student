@@ -2,6 +2,7 @@ package com.licht_meilleur.blue_student;
 
 import com.licht_meilleur.blue_student.client.OnlyBedRenderer;
 import com.licht_meilleur.blue_student.client.ShirokoRenderer;
+import com.licht_meilleur.blue_student.client.HoshinoRenderer;
 import com.licht_meilleur.blue_student.client.TabletBlockRenderer;
 import com.licht_meilleur.blue_student.client.projectile.BulletRenderer;
 import com.licht_meilleur.blue_student.client.screen.TabletScreen;
@@ -24,6 +25,7 @@ public class BlueStudentClient implements ClientModInitializer {
         ModScreenHandlers.register();
 
         EntityRendererRegistry.register(BlueStudentMod.SHIROKO, ShirokoRenderer::new);
+        EntityRendererRegistry.register(BlueStudentMod.HOSHINO, HoshinoRenderer::new);
 
         BlockEntityRendererRegistry.register(BlueStudentMod.TABLET_BE, ctx -> new TabletBlockRenderer());
         BlockEntityRendererFactories.register(BlueStudentMod.ONLY_BED_BE, ctx -> new OnlyBedRenderer());

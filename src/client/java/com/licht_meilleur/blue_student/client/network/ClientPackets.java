@@ -39,25 +39,28 @@ public class ClientPackets {
                     w.addParticle(ParticleTypes.FLAME, sx, sy, sz, 0, 0, 0);
                 }
 
-                spawnBulletTracer(w, pos, dir);
+                Vec3d start = spawnPos; // ★いま “出る” ことが確認できてる位置
+                spawnOneTracer(w, start, dir);
             });
         });
     }
-    //private static final DustParticleEffect GOLD =
-    //new DustParticleEffect(new Vector3f(1.0f, 0.82f, 0.15f), 0.8f); // サイズ小さめ推奨
+    private static final DustParticleEffect GOLD =
+            new DustParticleEffect(new Vector3f(1.0f, 0.82f, 0.15f), 0.9f); // 小さめ推奨
 
-    private static void spawnBulletTracer(ClientWorld w, Vec3d start, Vec3d dir) {
+    private static void spawnOneTracer(ClientWorld w, Vec3d start, Vec3d dir) {
         Vec3d d = dir.normalize();
+        Vec3d v = d.multiply(3.2);
 
-        for (int i = 0; i < 4; i++) { // ← 少なめ！！
-            Vec3d p = start.add(d.multiply(i * 0.4));
+        // 芯（光る）
+        w.addParticle(ParticleTypes.END_ROD, true, start.x, start.y, start.z, v.x, v.y, v.z);
 
-            w.addParticle(
-                    ParticleTypes.CRIT,
-                    p.x, p.y, p.z,
-                    d.x * 0.1, d.y * 0.1, d.z * 0.1
-            );
-        }
+        // 火花（見えやすい）
+        w.addParticle(ParticleTypes.CRIT, true, start.x, start.y, start.z, v.x * 0.6, v.y * 0.6, v.z * 0.6);
+
+        // ちょい煙（任意）
+        w.addParticle(ParticleTypes.SMOKE, true, start.x, start.y, start.z, v.x * 0.15, v.y * 0.15, v.z * 0.15);
     }
+
+
 
 }

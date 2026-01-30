@@ -6,6 +6,7 @@ import com.licht_meilleur.blue_student.block.TabletBlock;
 import com.licht_meilleur.blue_student.block.entity.OnlyBedBlockEntity;
 import com.licht_meilleur.blue_student.block.entity.TabletBlockEntity;
 import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
+import com.licht_meilleur.blue_student.entity.HoshinoEntity;
 import com.licht_meilleur.blue_student.entity.ShirokoEntity;
 import com.licht_meilleur.blue_student.entity.projectile.StudentBulletEntity;
 import com.licht_meilleur.blue_student.item.OnlyBedItem;
@@ -45,6 +46,13 @@ public class BlueStudentMod implements ModInitializer {
             Registries.ENTITY_TYPE,
             id("shiroko"),
             FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, ShirokoEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
+                    .build()
+    );
+    public static final EntityType<HoshinoEntity> HOSHINO = Registry.register(
+            Registries.ENTITY_TYPE,
+            id("hoshino"),
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, HoshinoEntity::new)
                     .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
                     .build()
     );
@@ -106,7 +114,7 @@ public class BlueStudentMod implements ModInitializer {
         LOGGER.info("[BlueStudent] onInitialize start");
 
         FabricDefaultAttributeRegistry.register(SHIROKO, AbstractStudentEntity.createAttributes());
-
+        FabricDefaultAttributeRegistry.register(HOSHINO, AbstractStudentEntity.createAttributes());
 
         ModScreenHandlers.register();
 

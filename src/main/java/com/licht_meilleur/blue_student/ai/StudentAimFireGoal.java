@@ -64,6 +64,16 @@ public class StudentAimFireGoal extends Goal {
                 target.getX() - mob.getX()
         )) - 90.0);
 
+        double dx = target.getX() - mob.getX();
+        double dz = target.getZ() - mob.getZ();
+        double dy = target.getBodyY(0.5) - mob.getEyeY();
+        double horiz = Math.sqrt(dx*dx + dz*dz);
+        float targetPitch = (float)(-Math.toDegrees(Math.atan2(dy, horiz)));
+
+        if (mob instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity se) {
+            se.setAimAngles(targetYaw, targetPitch);
+        }
+
         mob.setYaw(approachAngle(mob.getYaw(), targetYaw, 35.0f)); // 35度/tickくらい
         mob.bodyYaw = mob.getYaw();
         mob.headYaw = mob.getYaw();
@@ -74,6 +84,12 @@ public class StudentAimFireGoal extends Goal {
 
         // ===== 実射撃（ここで1回だけ撃つ）=====
         WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId());
+
+        // 腕、頭を敵に向ける
+        if (mob instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity se) {
+            se.faceTargetForShot(target, 35f, 25f); // ← 最後に完全エイム補正
+        }
+
 
         boolean fired = switch (spec.type) {
             case PROJECTILE -> projectileAction.shoot(student, target, spec);
@@ -100,4 +116,6 @@ public class StudentAimFireGoal extends Goal {
     public void stop() {
         target = null;
     }
+
+
 }

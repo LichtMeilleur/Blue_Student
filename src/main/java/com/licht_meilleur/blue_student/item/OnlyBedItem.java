@@ -31,8 +31,14 @@ public class OnlyBedItem extends Item {
         BlockPos headPos = footPos.offset(facing);
 
         // 置けるか
-        if (!world.getBlockState(footPos).canReplace(new ItemPlacementContext(ctx))) return ActionResult.FAIL;
-        if (!world.getBlockState(headPos).canReplace(new ItemPlacementContext(ctx))) return ActionResult.FAIL;
+        ItemPlacementContext footCtx = new ItemPlacementContext(ctx.getPlayer(), ctx.getHand(), ctx.getStack(),
+                new net.minecraft.util.hit.BlockHitResult(ctx.getHitPos(), ctx.getSide(), footPos, false));
+        ItemPlacementContext headCtx = new ItemPlacementContext(ctx.getPlayer(), ctx.getHand(), ctx.getStack(),
+                new net.minecraft.util.hit.BlockHitResult(ctx.getHitPos(), ctx.getSide(), headPos, false));
+
+        if (!world.getBlockState(footPos).canReplace(footCtx)) return ActionResult.FAIL;
+        if (!world.getBlockState(headPos).canReplace(headCtx)) return ActionResult.FAIL;
+
 
         BlockState foot = block.getDefaultState()
                 .with(OnlyBedBlock.FACING, facing)

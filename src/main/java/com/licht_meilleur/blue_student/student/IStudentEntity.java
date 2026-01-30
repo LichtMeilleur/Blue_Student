@@ -41,4 +41,7 @@ public interface IStudentEntity {
     default void requestDodge() {}
     default void requestJump() {}
     default void requestFall() {}
+    default void requestExit() {}
+    default void requestSwim() {}
+    default void requestSit() {}
 }
