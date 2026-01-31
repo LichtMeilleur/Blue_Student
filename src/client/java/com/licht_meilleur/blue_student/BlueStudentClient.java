@@ -1,8 +1,12 @@
 package com.licht_meilleur.blue_student;
 
 import com.licht_meilleur.blue_student.client.OnlyBedRenderer;
-import com.licht_meilleur.blue_student.client.ShirokoRenderer;
-import com.licht_meilleur.blue_student.client.HoshinoRenderer;
+import com.licht_meilleur.blue_student.client.student_renderer.KisakiRenderer;
+import com.licht_meilleur.blue_student.client.student_renderer.ShirokoRenderer;
+import com.licht_meilleur.blue_student.client.student_renderer.HoshinoRenderer;
+import com.licht_meilleur.blue_student.client.student_renderer.HinaRenderer;
+import com.licht_meilleur.blue_student.client.student_renderer.AliceRenderer;
+
 import com.licht_meilleur.blue_student.client.TabletBlockRenderer;
 import com.licht_meilleur.blue_student.client.projectile.BulletRenderer;
 import com.licht_meilleur.blue_student.client.screen.TabletScreen;
@@ -26,6 +30,10 @@ public class BlueStudentClient implements ClientModInitializer {
 
         EntityRendererRegistry.register(BlueStudentMod.SHIROKO, ShirokoRenderer::new);
         EntityRendererRegistry.register(BlueStudentMod.HOSHINO, HoshinoRenderer::new);
+        EntityRendererRegistry.register(BlueStudentMod.HINA, HinaRenderer::new);
+        EntityRendererRegistry.register(BlueStudentMod.KISAKI, KisakiRenderer::new);
+        EntityRendererRegistry.register(BlueStudentMod.ALICE, AliceRenderer::new);
+
 
         BlockEntityRendererRegistry.register(BlueStudentMod.TABLET_BE, ctx -> new TabletBlockRenderer());
         BlockEntityRendererFactories.register(BlueStudentMod.ONLY_BED_BE, ctx -> new OnlyBedRenderer());

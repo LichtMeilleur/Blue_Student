@@ -104,7 +104,7 @@ public class WeaponSpecs {
                     10.0,
                     18.0,
                     1,
-                    0,
+                    60,
                     0,
                     6.0,
                     true,           // infiniteAmmo

@@ -87,6 +87,7 @@ public class HoshinoEntity extends AbstractStudentEntity {
                 },
                 1.0
         ));
+        this.goalSelector.add(11, new StudentEatGoal(this, this));
     }
 
     // ★注意：initDataTracker() は override しない（Duplicate防止）

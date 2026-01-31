@@ -8,6 +8,10 @@ import com.licht_meilleur.blue_student.block.entity.TabletBlockEntity;
 import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
 import com.licht_meilleur.blue_student.entity.HoshinoEntity;
 import com.licht_meilleur.blue_student.entity.ShirokoEntity;
+import com.licht_meilleur.blue_student.entity.HinaEntity;
+import com.licht_meilleur.blue_student.entity.KisakiEntity;
+import com.licht_meilleur.blue_student.entity.AliceEntity;
+
 import com.licht_meilleur.blue_student.entity.projectile.StudentBulletEntity;
 import com.licht_meilleur.blue_student.item.OnlyBedItem;
 import com.licht_meilleur.blue_student.network.ModPackets;
@@ -56,6 +60,28 @@ public class BlueStudentMod implements ModInitializer {
                     .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
                     .build()
     );
+    public static final EntityType<HinaEntity> HINA = Registry.register(
+            Registries.ENTITY_TYPE,
+            id("hina"),
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, HinaEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
+                    .build()
+    );
+    public static final EntityType<KisakiEntity> KISAKI = Registry.register(
+            Registries.ENTITY_TYPE,
+            id("kisaki"),
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, KisakiEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
+                    .build()
+    );
+    public static final EntityType<AliceEntity> ALICE = Registry.register(
+            Registries.ENTITY_TYPE,
+            id("alice"),
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, AliceEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
+                    .build()
+    );
+
 
     // ===== OnlyBed =====
     public static final OnlyBedBlock ONLY_BED_BLOCK = Registry.register(
@@ -115,6 +141,10 @@ public class BlueStudentMod implements ModInitializer {
 
         FabricDefaultAttributeRegistry.register(SHIROKO, AbstractStudentEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(HOSHINO, AbstractStudentEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(HINA, AbstractStudentEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(KISAKI, AbstractStudentEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(ALICE, AbstractStudentEntity.createAttributes());
+        //FabricDefaultAttributeRegistry.register(HOSHINO, AbstractStudentEntity.createAttributes());
 
         ModScreenHandlers.register();
 

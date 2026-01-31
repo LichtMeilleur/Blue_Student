@@ -23,6 +23,9 @@ public class StudentAimFireGoal extends Goal {
     // 何tick“狙う”か（1〜3で見た目調整）
     private static final int AIM_TICKS = 1;
 
+    private final WeaponAction shotgunHitscanAction = new ShotgunHitscanWeaponAction();
+
+
     public StudentAimFireGoal(PathAwareEntity mob, IStudentEntity student) {
         this.mob = mob;
         this.student = student;
@@ -91,10 +94,17 @@ public class StudentAimFireGoal extends Goal {
         }
 
 
-        boolean fired = switch (spec.type) {
-            case PROJECTILE -> projectileAction.shoot(student, target, spec);
-            case HITSCAN -> hitscanAction.shoot(student, target, spec);
-        };
+        boolean fired;
+        if (spec.fxType == WeaponSpec.FxType.SHOTGUN) {
+            // ★ショットガンは hitscan散弾（1回ダメ）
+            fired = shotgunHitscanAction.shoot(student, target, spec);
+        } else {
+            fired = switch (spec.type) {
+                case PROJECTILE -> projectileAction.shoot(student, target, spec);
+                case HITSCAN -> hitscanAction.shoot(student, target, spec);
+            };
+        }
+
 
         if (fired) {
             student.requestShot(); // 演出

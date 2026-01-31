@@ -1828,7 +1828,7 @@
 				{
 					"name": "RightHandLocator",
 					"parent": "RightHand",
-					"pivot": [-2.52802, 10.96457, -0.04906]
+					"pivot": [-2.32802, 8.96457, -0.04906]
 				},
 				{
 					"name": "BladeLocator",

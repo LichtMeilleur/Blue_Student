@@ -443,7 +443,7 @@
 						"vector": [-89.78197, -2.49048, 84.99526]
 					},
 					"position": {
-						"vector": [0, 1.6, -18]
+						"vector": [0, 1.6, -12]
 					}
 				},
 				"Head": {
@@ -510,7 +510,7 @@
 						"vector": [167.2136, -64.01903, -190.14371]
 					},
 					"position": {
-						"vector": [8.2, -12, -5.8]
+						"vector": [8.2, -11, 0.2]
 					}
 				},
 				"Halo": {
@@ -1879,6 +1879,16 @@
 						}
 					}
 				},
+				"gun_hand": {
+					"scale": {
+						"vector": [1, -0.1, 0]
+					}
+				}
+			}
+		},
+		"animation.model.idle": {
+			"loop": true,
+			"bones": {
 				"gun_hand": {
 					"scale": {
 						"vector": [1, -0.1, 0]

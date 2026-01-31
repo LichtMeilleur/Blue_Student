@@ -29,7 +29,7 @@ public class ModPackets {
     public static final Identifier CALL_STUDENT = BlueStudentMod.id("call_student");
     public static final Identifier S2C_SHOT_FX = BlueStudentMod.id("s2c_shot_fx");
     // ★ 64にしたければ 64 にする
-    private static final int COST_DIAMOND = 1;
+    private static final int COST_DIAMOND = 64;
 
     public static void registerC2S() {
         System.out.println("[BlueStudent] registerC2S called");
@@ -99,9 +99,9 @@ public class ModPackets {
 
                     // ↓ 他生徒を作ったらここを差し替える
                      case HOSHINO -> BlueStudentMod.HOSHINO.create(sw);
-                    // case HINA    -> BlueStudentMod.HINA.create(sw);
-                    // case ALICE   -> BlueStudentMod.ALICE.create(sw);
-                    // case KISAKI  -> BlueStudentMod.KISAKI.create(sw);
+                     case HINA    -> BlueStudentMod.HINA.create(sw);
+                     case ALICE   -> BlueStudentMod.ALICE.create(sw);
+                     case KISAKI  -> BlueStudentMod.KISAKI.create(sw);
 
                     default -> BlueStudentMod.SHIROKO.create(sw); // 保険（enum増えた時）
                 };

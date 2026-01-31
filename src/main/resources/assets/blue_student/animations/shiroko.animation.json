@@ -735,12 +735,12 @@
 				},
 				"LeftEyeLashes": {
 					"position": {
-						"vector": [0, -1.6, 0]
+						"vector": [0, -1.2, 0]
 					}
 				},
 				"RightEyeLashes": {
 					"position": {
-						"vector": [0, -1.6, 0]
+						"vector": [0, -1.1, 0]
 					}
 				},
 				"RightEyelid": {
@@ -760,10 +760,10 @@
 				},
 				"gun": {
 					"rotation": {
-						"vector": [9.06498, -64.83508, 10.98298]
+						"vector": [1.56498, -64.83508, 10.98298]
 					},
 					"position": {
-						"vector": [-6.8, -22.4, 0]
+						"vector": [-6.8, -20.4, 0]
 					}
 				},
 				"halo": {
