@@ -6,19 +6,19 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.StringIdentifiable;
 
 public enum StudentId implements StringIdentifiable {
-    SHIROKO("shiroko", 35, 5,
+    SHIROKO("shiroko", 35, 20,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/shiroko_face.png")),
-    HOSHINO("hoshino", 40, 8,
+    HOSHINO("hoshino", 40, 20,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/hoshino_face.png")),
-    HINA("hina", 30, 4,
+    HINA("hina", 40, 20,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/hina_face.png")),
-    ALICE("alice", 28, 3,
+    ALICE("alice", 30, 20,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/alice_face.png")),
-    KISAKI("kisaki", 42, 7,
+    KISAKI("kisaki", 28, 18,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/kisaki_face.png"));
 

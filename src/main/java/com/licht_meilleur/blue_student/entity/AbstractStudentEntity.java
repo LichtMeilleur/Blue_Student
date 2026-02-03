@@ -5,6 +5,7 @@ import com.licht_meilleur.blue_student.block.OnlyBedBlock;
 import com.licht_meilleur.blue_student.block.entity.OnlyBedBlockEntity;
 import com.licht_meilleur.blue_student.inventory.StudentInventory;
 import com.licht_meilleur.blue_student.inventory.StudentScreenHandler;
+import com.licht_meilleur.blue_student.skill.SkillRegistry;
 import com.licht_meilleur.blue_student.state.StudentWorldState;
 import com.licht_meilleur.blue_student.student.IStudentEntity;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
@@ -24,19 +25,19 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.ai.pathing.PathNodeType;
 import net.minecraft.entity.attribute.DefaultAttributeContainer;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
+import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.PathAwareEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.FoodComponent;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.screen.ScreenHandler;
@@ -45,7 +46,6 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
-import net.minecraft.util.Pair;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
@@ -60,10 +60,8 @@ import software.bernie.geckolib.core.animation.AnimationState;
 import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
-import net.minecraft.item.Items;
 
 import java.util.EnumSet;
-import java.util.List;
 import java.util.UUID;
 
 public abstract class AbstractStudentEntity extends PathAwareEntity implements IStudentEntity, GeoEntity {
@@ -121,6 +119,10 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     private static final RawAnimation FALL   = RawAnimation.begin().thenLoop(ANIM_FALL);
     private static final RawAnimation ACTION = RawAnimation.begin().thenPlay(ANIM_ACTION);
 
+    @Nullable
+    protected RawAnimation getOverrideAnimationIfAny() { return null; }
+
+
     // client演出タイマー
     private int clientShotTicks = 0;
     private int lastShotTrigger = 0;
@@ -142,7 +144,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     private int lastEatTrigger = 0;
     private boolean eatJustStarted = false;
 
-    private static final int SHOT_ANIM_TICKS = 12;
+    private static final int SHOT_ANIM_TICKS = 4;
     private static final int DODGE_ANIM_TICKS = 10;
     private static final int JUMP_ANIM_TICKS  = 8;
     private static final int EAT_ANIM_TICKS   = 16; // actionの見える長さ（好みで）
@@ -173,20 +175,33 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     // ===== ゴースト =====
     private boolean ghost = false;
 
-
     // ★食べてる最中の表示用（Rendererで右手表示に使う）
     // -1 なら非表示
     private int eatingSlot = -1;
     private int eatingServerTicks = 0;
 
+    // skill state
+    private int skillCooldownTicks = 0;
+    private int skillActiveTicksLeft = 0;
 
+    // client animation trigger用（DataTrackerでも可）
+    private int skillTrigger = 0; // 発動のたびに+1してクライアントに知らせる
+
+    // ===== Guard buff（ホシノ固有で使う“共通API”）=====
+    protected static final UUID GUARD_ARMOR_UUID =
+            UUID.fromString("b3a2fba6-5c73-4d8f-a10b-0b3f6c7f8a01");
+    protected static final UUID GUARD_MAXHP_UUID =
+            UUID.fromString("6b6c9c2a-43a8-4d4f-9aa2-2e23c77c1c02");
+
+    protected boolean guardBuffApplied = false;
 
     public static DefaultAttributeContainer.Builder createAttributes() {
         return PathAwareEntity.createMobAttributes()
                 .add(EntityAttributes.GENERIC_MAX_HEALTH, 20.0)
                 .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.35)
                 .add(EntityAttributes.GENERIC_ATTACK_DAMAGE, 2.0)
-                .add(EntityAttributes.GENERIC_ARMOR, 0.0);
+                .add(EntityAttributes.GENERIC_ARMOR, 20.0)
+                .add(EntityAttributes.GENERIC_ARMOR_TOUGHNESS, 8.0);
     }
 
     protected AbstractStudentEntity(EntityType<? extends PathAwareEntity> type, World world) {
@@ -257,7 +272,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     }
 
     // ★追加：食べるアクション
-    private void requestEat() {
+    protected void requestEat() {
         if (this.getWorld().isClient) return;
         this.dataTracker.set(EAT_TRIGGER, this.dataTracker.get(EAT_TRIGGER) + 1);
     }
@@ -290,7 +305,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     }
 
     // ===== sleep position helpers =====
-    protected double getSleepForwardOffset() { return -0.7; }
+    protected double getSleepForwardOffset() { return 0.7; }
     protected double getSleepSideOffset() { return 0.0; }
     protected double getSleepYOffset() { return 0.3; }
 
@@ -384,13 +399,14 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
         tickLifeStateServer();
 
-
-// 表示タイマー
+        // 食事の表示タイマー
         if (eatingServerTicks > 0) {
             eatingServerTicks--;
             if (eatingServerTicks <= 0) eatingSlot = -1;
         }
 
+        // ★スキル共通Tick（まだ使ってないなら後でOK）
+        tickSkillCommon();
 
         // ===== server：オーナー不在ならSECURITYにする =====
         if (ownerUuid != null) {
@@ -413,7 +429,6 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                 }
             }
         }
-
     }
 
     private void applyStatsFromStudentId() {
@@ -426,6 +441,60 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         if (ar != null) ar.setBaseValue(id.getBaseDefense());
 
         this.setHealth(this.getMaxHealth());
+    }
+
+    /**
+     * ★ホシノのガードで使う（共通API）
+     * - on=true で防御/最大HPを加算
+     * - on=false で元に戻す
+     * ここは「ホシノだけが呼ぶ」想定。
+     */
+    protected void applyGuardBuff(boolean on, double addArmor, double addMaxHp, float healOnApply) {
+        var armor = this.getAttributeInstance(EntityAttributes.GENERIC_ARMOR);
+        var maxHp = this.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
+
+        if (on) {
+            if (guardBuffApplied) return;
+            guardBuffApplied = true;
+
+            if (armor != null) {
+                armor.removeModifier(GUARD_ARMOR_UUID);
+                armor.addPersistentModifier(new EntityAttributeModifier(
+                        GUARD_ARMOR_UUID,
+                        "guard_armor",
+                        addArmor,
+                        EntityAttributeModifier.Operation.ADDITION
+                ));
+            }
+
+            if (maxHp != null) {
+                maxHp.removeModifier(GUARD_MAXHP_UUID);
+                maxHp.addPersistentModifier(new EntityAttributeModifier(
+                        GUARD_MAXHP_UUID,
+                        "guard_maxhp",
+                        addMaxHp,
+                        EntityAttributeModifier.Operation.ADDITION
+                ));
+            }
+
+            // HP増加分だけ少し回復（最大まで全回復はしない）
+            float newMax = this.getMaxHealth();
+            if (healOnApply > 0 && this.getHealth() < newMax) {
+                this.setHealth(Math.min(newMax, this.getHealth() + healOnApply));
+            }
+
+        } else {
+            if (!guardBuffApplied) return;
+            guardBuffApplied = false;
+
+            if (armor != null) armor.removeModifier(GUARD_ARMOR_UUID);
+            if (maxHp != null) maxHp.removeModifier(GUARD_MAXHP_UUID);
+
+            // 現在HPが新max超えたら丸める
+            if (this.getHealth() > this.getMaxHealth()) {
+                this.setHealth(this.getMaxHealth());
+            }
+        }
     }
 
     private boolean isLifeLocked() {
@@ -450,7 +519,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         this.setVelocity(0, 0, 0);
         this.getNavigation().stop();
 
-        // ★事故フラグ解除
+        // 事故フラグ解除
         this.setGhost(false);
         this.setAiDisabled(false);
         this.setNoGravity(false);
@@ -463,42 +532,20 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         respawnSafePos = null;
     }
 
-
     private void tickLifeStateServer() {
-
-
-        // ★復活ロック中は常に「非衝突・無重力・AI停止」を維持（何かの拍子に戻るのを防ぐ）
-        this.setAiDisabled(true);
-        this.setNoGravity(true);
-        this.setGhost(true);        // noClip
-
-
-
-        // NORMALは何もしない
-        //if (lifeState == StudentLifeState.NORMAL) return;
-
         ServerWorld sw = (ServerWorld) this.getWorld();
 
-        // 復活処理中にベッドが壊れたら即復帰（思想通り）
+        // 復活処理中にベッドが壊れたら即復帰
         boolean bedOk = (respawnBedFoot != null && isValidLinkedBed(sw, respawnBedFoot));
         if (!bedOk && isLifeLocked()) {
-
-            System.out.println("[BS] bed invalid! sid=" + getStudentId()
-                    + " respawnBedFoot=" + respawnBedFoot
-                    + " chunkLoaded=" + sw.isChunkLoaded(respawnBedFoot)
-                    + " footState=" + sw.getBlockState(respawnBedFoot));
-
-            BedLinkManager.clearBedPos(ownerUuid, getStudentId()); // ★追加
+            BedLinkManager.clearBedPos(ownerUuid, getStudentId());
             forceWakeUp(sw, this.getBlockPos(), true);
             return;
         }
 
-
         switch (lifeState) {
-
-
             case NORMAL -> {
-                // ★ここで必ず復帰保証
+                // NORMALは常に復帰保証
                 this.setGhost(false);
                 this.setAiDisabled(false);
                 this.setNoGravity(false);
@@ -506,7 +553,6 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                 return;
             }
 
-            // 1) EXITING：exitアニメ待ち
             case EXITING -> {
                 this.setVelocity(0, 0, 0);
                 this.getNavigation().stop();
@@ -516,12 +562,10 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                     return;
                 }
 
-                // EXITが終わったら「居ない時間」へ（当たり判定OFFのまま）
                 setLifeState(StudentLifeState.RESPAWN_DELAY);
-                lifeTimer = 10; // 0.5秒くらい（好みで）
+                lifeTimer = 10;
             }
 
-            // 2) RESPAWN_DELAY：世界に居ない演出（判定OFFのまま）
             case RESPAWN_DELAY -> {
                 this.setVelocity(0, 0, 0);
                 this.getNavigation().stop();
@@ -531,79 +575,58 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                     return;
                 }
 
-                // 次：ベッドへワープ
                 setLifeState(StudentLifeState.WARPING_TO_BED);
             }
 
-            // 3) WARPING_TO_BED：ベッド位置へ移動して寝る
             case WARPING_TO_BED -> {
                 this.setVelocity(0, 0, 0);
                 this.getNavigation().stop();
 
-                // まずワープ（このtickで位置確定）
                 Vec3d p = getSleepPos(sw, respawnBedFoot);
                 float yaw = getBedYaw(sw, respawnBedFoot);
                 this.setYaw(yaw); this.setBodyYaw(yaw); this.setHeadYaw(yaw);
                 this.refreshPositionAndAngles(p.x, p.y, p.z, yaw, this.getPitch());
 
-                // ベッドBE演出ON
                 var be = sw.getBlockEntity(respawnBedFoot);
                 if (be instanceof OnlyBedBlockEntity obe) obe.setSleepAnim(true);
 
-                // ★次tickでSLEEPINGへ
                 setLifeState(StudentLifeState.SLEEPING);
                 return;
             }
 
-
-            // 4) SLEEPING：寝た目の固定（回復はRECOVERINGに分けてもOK）
             case SLEEPING -> {
                 this.setVelocity(0, 0, 0);
                 this.getNavigation().stop();
 
-                // 寝位置固定
                 Vec3d p = getSleepPos(sw, respawnBedFoot);
                 float yaw = getBedYaw(sw, respawnBedFoot);
                 this.setYaw(yaw); this.setBodyYaw(yaw); this.setHeadYaw(yaw);
                 this.refreshPositionAndAngles(p.x, p.y, p.z, yaw, this.getPitch());
 
-                // すぐ回復状態へ（分けたいのであれば）
                 setLifeState(StudentLifeState.RECOVERING);
-                // recoverTick など使うならここで初期化
-                // recoverTick = 0;
             }
 
-            // 5) RECOVERING：回復処理
             case RECOVERING -> {
                 this.setVelocity(0, 0, 0);
                 this.getNavigation().stop();
 
-                // 寝位置固定
                 Vec3d p = getSleepPos(sw, respawnBedFoot);
                 float yaw = getBedYaw(sw, respawnBedFoot);
                 this.setYaw(yaw); this.setBodyYaw(yaw); this.setHeadYaw(yaw);
                 this.refreshPositionAndAngles(p.x, p.y, p.z, yaw, this.getPitch());
 
-                // 回復（例：30tickごとに+1）
                 if (this.age % 30 == 0) {
                     this.heal(1f);
                 }
 
                 if (this.getHealth() >= this.getMaxHealth()) {
-                    // 満タンなら起床
                     forceWakeUp(sw, this.getBlockPos(), true);
                 }
             }
 
-
-
-            default -> {
-                // もし将来 enum が増えた時の保険
-                setLifeState(StudentLifeState.NORMAL);
-            }
+            default -> setLifeState(StudentLifeState.NORMAL);
         }
     }
-
 
     // ===== item pickup =====
     protected void tryPickupNearbyItems() {
@@ -654,150 +677,6 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         return stack;
     }
 
-    // ====== ダメージ処理：invulnerableではなく state で弾く ======
-    /*@Override
-    public boolean damage(DamageSource source, float amount) {
-        if (this.getWorld().isClient) {
-            return super.damage(source, amount);
-        }
-
-        // ★復活フェーズ中は基本ダメージ無効
-        if (isLifeLocked()) {
-            ServerWorld sw = (ServerWorld) this.getWorld();
-
-            // ベッドが無効なら「強制起床」+ リンク破棄
-            if (respawnBedFoot == null || !isValidLinkedBed(sw, respawnBedFoot)) {
-                BedLinkManager.clearBedPos(ownerUuid, getStudentId());
-                forceWakeUp(sw, this.getBlockPos(), true);
-            }
-
-            return false; // ロック中は常に無効
-        }
-
-
-        float after = this.getHealth() - amount;
-
-        // ★致死なら「死なずに復活処理へ」
-        if (after <= 0.5f) {
-            startBedRespawn((ServerWorld) this.getWorld());
-            return false;
-        }
-
-        return super.damage(source, amount);
-    }*/
-
-
-    private void startBedRespawn(ServerWorld sw) {
-        BlockPos bed = null;
-        if (ownerUuid != null) {
-            bed = BedLinkManager.getBedPos(ownerUuid, getStudentId());
-        }
-
-
-        if (bed == null) {
-            bed = findNearestBedFoot(sw, getStudentId(), this.getBlockPos(), 96);
-            if (bed != null && ownerUuid != null) {
-                BedLinkManager.setBedPos(ownerUuid, getStudentId(), bed);
-            }
-        }
-
-
-        this.respawnBedFoot = null;
-        this.respawnSafePos = null;
-
-
-
-        // ★リンクがあっても「本当にベッドか」検証。ダメならリンク削除して探索へ
-        if (bed != null && !isValidLinkedBed(sw, bed)) {
-            BedLinkManager.clearBedPos(ownerUuid, getStudentId());
-            bed = null;
-        }
-
-
-        // ★見つからないなら消す（仕様）
-        if (bed == null) {
-            StudentWorldState.get(sw).clearStudent(getStudentId());
-            this.discard();
-            return;
-        }
-
-        // 参照保存
-        this.respawnBedFoot = bed;
-        this.respawnSafePos = findSafeRespawnPosNearBed(sw, bed);
-
-        // ★復活準備：停止＆事故フラグ設定（invulnerableは使わない）
-        this.setHealth(1f);
-        this.getNavigation().stop();
-        this.setVelocity(0, 0, 0);
-
-        this.setAiDisabled(true);
-        this.setNoGravity(true);
-        this.setGhost(true);     // noClip=true（押し出し/詰まり回避）
-        this.setInvulnerable(false);
-
-        // ★EXIT演出（あなたの演出トリガー）
-        this.requestExit();
-
-        // 状態：EXITING（演出時間）
-        setLifeState(StudentLifeState.EXITING);
-
-        // lifeTimerは共通で使う（例：60tick）
-        this.lifeTimer = 60;
-    }
-
-
-    // ===== ベッド探索 =====
-    protected @Nullable BlockPos findNearestBedFoot(ServerWorld sw, StudentId sid, BlockPos origin, int r) {
-        BlockPos best = null;
-        double bestD2 = 1e18;
-
-        BlockPos.Mutable m = new BlockPos.Mutable();
-        for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) for (int dy = -4; dy <= 4; dy++) {
-            m.set(origin.getX()+dx, origin.getY()+dy, origin.getZ()+dz);
-            BlockState st = sw.getBlockState(m);
-            if (!(st.getBlock() instanceof OnlyBedBlock)) continue;
-            if (st.get(OnlyBedBlock.PART) != BedPart.FOOT) continue;
-            if (st.get(OnlyBedBlock.STUDENT) != sid) continue;
-
-            double d2 = m.getSquaredDistance(origin);
-            if (d2 < bestD2) { bestD2 = d2; best = m.toImmutable(); }
-        }
-        return best;
-    }
-
-    @Nullable
-    private BlockPos findSafeRespawnPosNearBed(ServerWorld world, BlockPos bedFootPos) {
-        BlockPos base = bedFootPos.up();
-        BlockPos.Mutable m = new BlockPos.Mutable();
-
-        for (int r = 0; r <= 2; r++) {
-            for (int dx = -r; dx <= r; dx++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    m.set(base.getX() + dx, base.getY(), base.getZ() + dz);
-                    if (isSafeStandPos(world, m)) {
-                        return m.toImmutable();
-                    }
-                }
-            }
-        }
-        return base;
-    }
-
-    private boolean isSafeStandPos(ServerWorld world, BlockPos pos) {
-        BlockPos below = pos.down();
-        var belowState = world.getBlockState(below);
-
-        if (belowState.isAir()) return false;
-        if (belowState.getCollisionShape(world, below).isEmpty()) return false;
-
-        if (!world.getFluidState(below).isEmpty()) return false;
-
-        if (!world.getBlockState(pos).getCollisionShape(world, pos).isEmpty()) return false;
-        if (!world.getBlockState(pos.up()).getCollisionShape(world, pos.up()).isEmpty()) return false;
-
-        return true;
-    }
-
     // ===== ghost =====
     private void setGhost(boolean v) {
         ghost = v;
@@ -806,35 +685,18 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
     @Override
     public boolean isAttackable() {
-        // ★復活ロック中は攻撃対象にしない
         return !isLifeLocked() && super.isAttackable();
     }
 
     @Override
-    public boolean canHit() {
-        // ★当たり判定（ヒット判定）自体を無効化したい場合
-        // Yarn環境で存在するなら効きます（存在しないならこのoverrideは消してください）
-        return !isLifeLocked() && super.canHit();
-    }
-
-    @Override
-    public boolean canBeHitByProjectile() {
-        // ★弾・矢なども無効化
-        return !isLifeLocked() && super.canBeHitByProjectile();
-    }
-
-    @Override
     public boolean isPushable() {
-        // ★押し出し（接触）無効
         return !ghost && !isLifeLocked() && super.isPushable();
     }
 
     @Override
     public boolean collidesWith(Entity other) {
-        // ★衝突無効（あなたの ghost ロジックを強化）
         return !ghost && !isLifeLocked() && super.collidesWith(other);
     }
-
 
     private void setLifeState(StudentLifeState s) {
         this.lifeState = s;
@@ -858,14 +720,18 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         if (!(st.getBlock() instanceof OnlyBedBlock) || !st.contains(OnlyBedBlock.FACING)) {
             return this.getYaw();
         }
+
         Direction dir = st.get(OnlyBedBlock.FACING);
-        return dir.asRotation();
+
+        // ★寝る向きだけ反転（180度）
+        return dir.getOpposite().asRotation();
+        // もしくは: return dir.asRotation() + 180.0f;
     }
+
 
     private boolean isValidLinkedBed(ServerWorld sw, @Nullable BlockPos bedFoot) {
         if (sw == null || bedFoot == null) return false;
 
-        // チャンクロードは例外が出ても false で逃がす（ワールド生成直後や不正座標保険）
         try {
             sw.getChunk(bedFoot);
         } catch (Exception e) {
@@ -907,62 +773,6 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         if (head.get(OnlyBedBlock.FACING) != facing) return false;
 
         return true;
-    }
-
-
-
-
-    private boolean tryEatFromInventory() {
-        // すでに食事中なら再開しない
-        if (eatingServerTicks > 0) return false;
-
-        for (int i = 0; i < studentInventory.size(); i++) {
-            ItemStack st = studentInventory.getStack(i);
-            if (st.isEmpty()) continue;
-            if (!st.isFood()) continue;
-
-            FoodComponent food = st.getItem().getFoodComponent();
-            if (food == null) continue;
-
-            // デバフ食品（腐肉など）を除外
-            if (isBadFoodItem(st)) continue;
-
-
-            // 食べる：満腹度加算（簡易）
-            int hunger = Math.max(0, food.getHunger());
-            float sat = Math.max(0f, food.getSaturationModifier()) * hunger * 2.0f;
-
-
-            // “食べた瞬間にちょい回復”を入れるならここ（好み）
-            // this.heal(Math.max(1f, hunger * 0.5f));
-
-            // スタック消費
-            st.decrement(1);
-            studentInventory.markDirty();
-
-            // 演出：ACTIONトリガー
-            requestEat();
-
-            // 右手表示用
-            eatingSlot = i;
-            eatingServerTicks = EAT_ANIM_TICKS;
-
-            return true;
-        }
-        return false;
-    }
-
-
-
-    // ===== Rendererが参照する（右手表示用）=====
-    public int getEatingSlotForRender() {
-        return eatingSlot;
-    }
-
-    public ItemStack getEatingStackForRender() {
-        if (eatingSlot < 0) return ItemStack.EMPTY;
-        if (eatingSlot >= studentInventory.size()) return ItemStack.EMPTY;
-        return studentInventory.getStack(eatingSlot);
     }
 
     // ===== ammo api =====
@@ -1031,26 +841,28 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     private PlayState commonPredicate(AnimationState<AbstractStudentEntity> state) {
         StudentLifeState ls = getLifeStateClientSafe();
 
-        // ① 復活系は最優先（ここでRUNに落ちるのを完全に防ぐ）
+        // 復活系は最優先
         if (ls == StudentLifeState.EXITING) {
             state.getController().setAnimation(EXIT);
             return PlayState.CONTINUE;
         }
 
-        // ★WARP中は “寝る前のワープ準備” なので、とにかく動かない系を当てる
-        // ここをIDLEにしておくと一番事故りにくい（EXITでも可）
         if (ls == StudentLifeState.WARPING_TO_BED) {
-            state.getController().setAnimation(IDLE); // or EXIT
+            state.getController().setAnimation(IDLE);
             return PlayState.CONTINUE;
         }
 
-        // ★「回復中も寝てる」= SLEEPING + RECOVERING は SLEEP固定
         if (ls == StudentLifeState.SLEEPING || ls == StudentLifeState.RECOVERING) {
             state.getController().setAnimation(SLEEP);
             return PlayState.CONTINUE;
         }
 
-        // ② ここから下は通常演出（食事/回避/射撃/リロードなど）
+        RawAnimation ov = getOverrideAnimationIfAny();
+        if (ov != null) {
+            state.getController().setAnimation(ov);
+            return PlayState.CONTINUE;
+        }
+
         if (clientEatTicks > 0) {
             if (eatJustStarted) {
                 state.getController().forceAnimationReset();
@@ -1116,8 +928,6 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         return PlayState.CONTINUE;
     }
 
-
-
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
         return geoCache;
@@ -1148,16 +958,13 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     // ===== movement tweak =====
     @Override
     public void tickMovement() {
-        // ★ serverで復活ロック中は「移動処理そのものを潰す」
         if (!this.getWorld().isClient && isLifeLocked()) {
             ServerWorld sw = (ServerWorld) this.getWorld();
 
-            // 念押し：AI/ナビ/速度を殺す
             this.getNavigation().stop();
             this.setVelocity(0, 0, 0);
             this.velocityDirty = true;
 
-            // 位置固定が必要な状態だけベッドへ吸着
             if ((lifeState == StudentLifeState.WARPING_TO_BED
                     || lifeState == StudentLifeState.SLEEPING
                     || lifeState == StudentLifeState.RECOVERING)
@@ -1171,16 +978,13 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                 this.refreshPositionAndAngles(p.x, p.y, p.z, yaw, this.getPitch());
             }
 
-            // ★ここが重要：super.tickMovement() を呼ばない
             return;
         }
 
-        // ---- 通常時の移動 ----
         super.tickMovement();
 
         if (this.getWorld().isClient) return;
 
-        // 既存：水中の微加速（必要なら）
         if (this.isTouchingWater() && !this.hasVehicle()) {
             Vec3d look = this.getRotationVec(1.0f);
             Vec3d forward = new Vec3d(look.x, 0, look.z);
@@ -1190,7 +994,6 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             }
         }
     }
-
 
     // ===== aim api =====
     public void setAimAngles(float yaw, float pitch) {
@@ -1225,8 +1028,6 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         nbt.putString("StudentId", getStudentId().asString());
         nbt.putInt("Ammo", ammoInMag);
         nbt.putInt("ReloadLeft", reloadTicksLeft);
-
-
     }
 
     @Override
@@ -1249,10 +1050,9 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         ammoInMag = nbt.contains("Ammo") ? nbt.getInt("Ammo") : ammoInMag;
         reloadTicksLeft = nbt.contains("ReloadLeft") ? nbt.getInt("ReloadLeft") : 0;
 
-
         appliedStats = false;
 
-        // ★超重要：事故フラグ強制解除（復活途中の再開をNBT保存していない前提）
+        // 事故フラグ強制解除
         this.setInvulnerable(false);
         this.setNoGravity(false);
         this.noClip = false;
@@ -1269,12 +1069,12 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         this.eatingSlot = -1;
         this.eatingServerTicks = 0;
 
-
-
-
-
-
-
+        // ガード解除（念のため）
+        guardBuffApplied = false;
+        var armor = this.getAttributeInstance(EntityAttributes.GENERIC_ARMOR);
+        var maxHp = this.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
+        if (armor != null) armor.removeModifier(GUARD_ARMOR_UUID);
+        if (maxHp != null) maxHp.removeModifier(GUARD_MAXHP_UUID);
     }
 
     @Override
@@ -1282,7 +1082,6 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         super.initDataTracker();
 
         this.dataTracker.startTracking(LIFE_STATE, StudentLifeState.NORMAL.ordinal());
-
         this.dataTracker.startTracking(DODGE_TRIGGER, 0);
         this.dataTracker.startTracking(EAT_TRIGGER, 0);
 
@@ -1293,9 +1092,6 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
         this.dataTracker.startTracking(SHOT_TRIGGER, 0);
         this.dataTracker.startTracking(RELOAD_TRIGGER, 0);
-
-
-
     }
 
     // ===== remove =====
@@ -1313,66 +1109,192 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         }
     }
 
-    // ====== ここはあなたの既存実装に合わせて存在している前提（なければ追加して下さい）=====
-    // exit演出用（DataTrackerトリガーの実装など）
+    // exit演出用（あなたの既存実装に合わせて）
     public void requestExit() {
-        // 既にあなたのコードにある想定：無ければ、EXIT用のTrackedDataを追加してここで++してください
+        // あなたの実装に合わせてください（必要ならTrackedDataを追加して++）
     }
 
-    // ====== 近接アイテム拾い等で使っているなら、必要に応じて残してください =====
-
-    // まずは「危険そうな食べ物は食べない」ブラックリスト方式（確実にコンパイルが通る）
-    private boolean isBadFoodItem(ItemStack st) {
-        if (st.isEmpty()) return true;
-
-        // 代表的なデバフ・事故系
-        if (st.isOf(Items.ROTTEN_FLESH)) return true;      // 腐った肉：空腹
-        if (st.isOf(Items.POISONOUS_POTATO)) return true;  // 毒芋
-        if (st.isOf(Items.SPIDER_EYE)) return true;        // 毒
-        if (st.isOf(Items.PUFFERFISH)) return true;        // 毒・吐き気など
-
-        // 事故りやすい系（好みでON/OFF）
-        if (st.isOf(Items.CHORUS_FRUIT)) return true;      // テレポ事故
-        if (st.isOf(Items.SUSPICIOUS_STEW)) return true;   // 効果が多様で制御しづらい
-
-        return false;
+    // ===== Rendererが参照する（右手表示用）=====
+    public int getEatingSlotForRender() {
+        return eatingSlot;
     }
-    private boolean tryEatFoodForHeal() {
-        if (eatingServerTicks > 0) return false;
 
-        for (int i = 0; i < studentInventory.size(); i++) {
-            ItemStack st = studentInventory.getStack(i);
-            if (st.isEmpty()) continue;
-            if (!st.isFood()) continue;
+    public ItemStack getEatingStackForRender() {
+        if (eatingSlot < 0) return ItemStack.EMPTY;
+        if (eatingSlot >= studentInventory.size()) return ItemStack.EMPTY;
+        return studentInventory.getStack(eatingSlot);
+    }
 
-            // ★ ブラックリスト（安全確定）
-            if (st.isOf(Items.ROTTEN_FLESH)) continue;
-            if (st.isOf(Items.POISONOUS_POTATO)) continue;
-            if (st.isOf(Items.SPIDER_EYE)) continue;
-            if (st.isOf(Items.PUFFERFISH)) continue;
+    // ===== security =====
+    @Override
+    public BlockPos getSecurityPos() { return securityPos; }
 
-            int heal = 6; // 固定回復量（好みで）
+    @Override
+    public void setSecurityPos(BlockPos pos) { this.securityPos = pos; }
 
-            this.heal(heal);
-
-            st.decrement(1);
-            studentInventory.markDirty();
-
-            requestEat();
-
-            eatingSlot = i;
-            eatingServerTicks = EAT_ANIM_TICKS;
-
-            return true;
+    @Override
+    protected void applyDamage(DamageSource source, float amount) {
+        if (this.getWorld().isClient) {
+            super.applyDamage(source, amount);
+            return;
         }
-        return false;
+
+        if (isLifeLocked()) return;
+
+        float after = this.getHealth() - amount;
+
+        if (after <= 0.5f) {
+            startBedRespawn((ServerWorld) this.getWorld());
+            return;
+        }
+
+        super.applyDamage(source, amount);
     }
+
+    // ====== ベッド復活（あなたの既存をそのまま）=====
+    private void startBedRespawn(ServerWorld sw) {
+        BlockPos bed = null;
+        if (ownerUuid != null) {
+            bed = BedLinkManager.getBedPos(ownerUuid, getStudentId());
+        }
+
+        if (bed == null) {
+            bed = findNearestBedFoot(sw, getStudentId(), this.getBlockPos(), 96);
+            if (bed != null && ownerUuid != null) {
+                BedLinkManager.setBedPos(ownerUuid, getStudentId(), bed);
+            }
+        }
+
+        this.respawnBedFoot = null;
+        this.respawnSafePos = null;
+
+        if (bed != null && !isValidLinkedBed(sw, bed)) {
+            BedLinkManager.clearBedPos(ownerUuid, getStudentId());
+            bed = null;
+        }
+
+        if (bed == null) {
+            StudentWorldState.get(sw).clearStudent(getStudentId());
+            this.discard();
+            return;
+        }
+
+        this.respawnBedFoot = bed;
+        this.respawnSafePos = findSafeRespawnPosNearBed(sw, bed);
+
+        this.setHealth(1f);
+        this.getNavigation().stop();
+        this.setVelocity(0, 0, 0);
+
+        this.setAiDisabled(true);
+        this.setNoGravity(true);
+        this.setGhost(true);
+        this.setInvulnerable(false);
+
+        this.requestExit();
+
+        setLifeState(StudentLifeState.EXITING);
+        this.lifeTimer = 60;
+    }
+
+    protected @Nullable BlockPos findNearestBedFoot(ServerWorld sw, StudentId sid, BlockPos origin, int r) {
+        BlockPos best = null;
+        double bestD2 = 1e18;
+
+        BlockPos.Mutable m = new BlockPos.Mutable();
+        for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) for (int dy = -4; dy <= 4; dy++) {
+            m.set(origin.getX()+dx, origin.getY()+dy, origin.getZ()+dz);
+            BlockState st = sw.getBlockState(m);
+            if (!(st.getBlock() instanceof OnlyBedBlock)) continue;
+            if (st.get(OnlyBedBlock.PART) != BedPart.FOOT) continue;
+            if (st.get(OnlyBedBlock.STUDENT) != sid) continue;
+
+            double d2 = m.getSquaredDistance(origin);
+            if (d2 < bestD2) { bestD2 = d2; best = m.toImmutable(); }
+        }
+        return best;
+    }
+
+    @Nullable
+    private BlockPos findSafeRespawnPosNearBed(ServerWorld world, BlockPos bedFootPos) {
+        BlockPos base = bedFootPos.up();
+        BlockPos.Mutable m = new BlockPos.Mutable();
+
+        for (int r = 0; r <= 2; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    m.set(base.getX() + dx, base.getY(), base.getZ() + dz);
+                    if (isSafeStandPos(world, m)) {
+                        return m.toImmutable();
+                    }
+                }
+            }
+        }
+        return base;
+    }
+
+    private boolean isSafeStandPos(ServerWorld world, BlockPos pos) {
+        BlockPos below = pos.down();
+        var belowState = world.getBlockState(below);
+
+        if (belowState.isAir()) return false;
+        if (belowState.getCollisionShape(world, below).isEmpty()) return false;
+        if (!world.getFluidState(below).isEmpty()) return false;
+
+        if (!world.getBlockState(pos).getCollisionShape(world, pos).isEmpty()) return false;
+        if (!world.getBlockState(pos.up()).getCollisionShape(world, pos.up()).isEmpty()) return false;
+
+        return true;
+    }
+
+    // Goalから参照するだけの薄い公開API
+    public boolean isLifeLockedForGoal() {
+        return isLifeLocked();
+    }
+
+    public void requestEatFromGoal() {
+        requestEat();
+    }
+
+    public void startEatingVisualFromGoal(int slot, int ticks) {
+        this.eatingSlot = slot;
+        this.eatingServerTicks = ticks;
+    }
+
+    // ===== skill common（未実装のため無効化中）=====
+    private void tickSkillCommon() {
+        if (skillCooldownTicks > 0) skillCooldownTicks--;
+
+        if (skillActiveTicksLeft > 0) {
+            skillActiveTicksLeft--;
+
+            // ★ スキル未実装なので何もしない
+            if (skillActiveTicksLeft == 0) {
+                skillCooldownTicks = 0;
+            }
+        }
+    }
+
+
+    public boolean isSkillActive() { return skillActiveTicksLeft > 0; }
+    public boolean canStartSkill() { return skillCooldownTicks <= 0 && skillActiveTicksLeft <= 0; }
+
+    public void startSkillNow() {
+        if (!canStartSkill()) return;
+
+        // ★ スキル未実装なので「時間だけ消費」
+        skillActiveTicksLeft = 40; // 仮：2秒くらい（適当でOK）
+
+        skillTrigger++; // アニメ用だけ残してOK
+    }
+
+
+    // ===== エイム補正（あなたの既存）=====
     public void faceTargetForShot(LivingEntity target, float maxYawStep, float maxPitchStep) {
         if (target == null) return;
 
         Vec3d from = this.getEyePos();
         Vec3d to = target.getEyePos();
-
         Vec3d d = to.subtract(from);
 
         double dx = d.x;
@@ -1399,53 +1321,24 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         if (delta < -maxStep) delta = -maxStep;
         return cur + delta;
     }
-    // ===== security =====
-    @Override
-    public BlockPos getSecurityPos() { return securityPos; }
-
-    @Override
-    public void setSecurityPos(BlockPos pos) { this.securityPos = pos; }
-
-    @Override
-    protected void applyDamage(DamageSource source, float amount) {
-        if (this.getWorld().isClient) {
-            super.applyDamage(source, amount);
-            return;
-        }
-
-        // 復活フェーズ中は一切減らさない
-        if (isLifeLocked()) return;
-
-        float after = this.getHealth() - amount;
-
-        // ★ここが“致死”の最終判定ポイント
-        if (after <= 0.5f) {
-            startBedRespawn((ServerWorld) this.getWorld());
-            return; // super.applyDamage を呼ばないので死なない
-        }
-
-        super.applyDamage(source, amount);
+    // Goal側から呼べるように公開
+    public boolean isBadFoodItemForGoal(net.minecraft.item.ItemStack st) {
+        return isBadFoodItem(st); // 既存privateを使う
     }
 
-    // Goalから参照するだけの薄い公開API（中身は既存のprivateを呼ぶだけ）
-    public boolean isLifeLockedForGoal() {
-        return isLifeLocked();
+    // もし isBadFoodItem 自体が無いなら最低限これを追加
+    private boolean isBadFoodItem(net.minecraft.item.ItemStack st) {
+        if (st == null || st.isEmpty()) return true;
+
+        // 安全確定のブラックリスト（好みで追加）
+        if (st.isOf(net.minecraft.item.Items.ROTTEN_FLESH)) return true;
+        if (st.isOf(net.minecraft.item.Items.POISONOUS_POTATO)) return true;
+        if (st.isOf(net.minecraft.item.Items.SPIDER_EYE)) return true;
+        if (st.isOf(net.minecraft.item.Items.PUFFERFISH)) return true;
+        if (st.isOf(net.minecraft.item.Items.CHORUS_FRUIT)) return true;
+        if (st.isOf(net.minecraft.item.Items.SUSPICIOUS_STEW)) return true;
+
+        return false;
     }
-
-    public void requestEatFromGoal() {
-        requestEat();
-    }
-
-    public void startEatingVisualFromGoal(int slot, int ticks) {
-        this.eatingSlot = slot;
-        this.eatingServerTicks = ticks;
-    }
-
-    // ブラックリストもGoal側で使えるように
-    public boolean isBadFoodItemForGoal(ItemStack st) {
-        return isBadFoodItem(st); // 既存のprivateを呼ぶ
-    }
-
-
 
 }

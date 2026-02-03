@@ -40,7 +40,8 @@ public class BedLinkEvents {
             BlockPos vanillaHeadPos = vanillaFootPos.offset(vanillaFacing);
 
             // OnlyBed の向き（モデル都合で反転したいなら opposite のままでOK）
-            Direction onlyFacing = vanillaFacing.getOpposite();
+            //Direction onlyFacing = vanillaFacing.getOpposite();
+            Direction onlyFacing = vanillaFacing;              // ★opposite を外す
 
             // OnlyBed の HEAD は onlyFacing 基準
             BlockPos onlyHeadPos = vanillaFootPos.offset(onlyFacing);
@@ -49,11 +50,15 @@ public class BedLinkEvents {
             BlockPos oldFoot = BedLinkManager.getBedPos(player.getUuid(), linking);
             if (oldFoot != null) {
                 BlockState old = world.getBlockState(oldFoot);
-                if (old.isOf(BlueStudentMod.ONLY_BED_BLOCK)) {
-                    world.setBlockState(oldFoot, Blocks.AIR.getDefaultState(),
-                            Block.NOTIFY_ALL | Block.SKIP_DROPS);
+                if (old.isOf(BlueStudentMod.ONLY_BED_BLOCK) && old.contains(OnlyBedBlock.FACING)) {
+                    Direction f = old.get(OnlyBedBlock.FACING);
+                    BlockPos oldHead = oldFoot.offset(f);
+                    int killFlags = Block.NOTIFY_ALL | Block.SKIP_DROPS;
+                    world.setBlockState(oldHead, Blocks.AIR.getDefaultState(), killFlags);
+                    world.setBlockState(oldFoot, Blocks.AIR.getDefaultState(), killFlags);
                 }
             }
+
 
             // ★バニラベッドを「両方」ドロップなしで削除（重要：HEAD→FOOT）
             int killFlags = Block.NOTIFY_ALL | Block.SKIP_DROPS;

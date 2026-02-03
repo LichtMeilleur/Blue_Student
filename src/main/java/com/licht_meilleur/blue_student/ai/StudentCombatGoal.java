@@ -79,7 +79,7 @@ public class StudentCombatGoal extends Goal {
 
     @Override
     public void start() {
-        cooldown = 0f;
+        //cooldown = 0f;
         repathCooldown = 0;
     }
 
@@ -102,15 +102,41 @@ public class StudentCombatGoal extends Goal {
             return;
         }
 
+
+
         WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId());
-        double dist = mob.distanceTo(target);
+        double dx = target.getX() - mob.getX();
+        double dz = target.getZ() - mob.getZ();
+        double distH = Math.sqrt(dx*dx + dz*dz);      // 水平距離
+        double dist3 = mob.distanceTo(target);        // 3D距離（必要なら）
+        double dist = isFlyingMob() ? distH : dist3;  // ★飛行中は水平で見る
+
 
         // ===== 追う（理想距離へ）=====
         if (dist > spec.preferredMaxRange || dist > spec.range) {
+            if (isFlyingMob()) {
+                // ★飛行中：地上ナビで追わない（撃てる距離になるまで少し寄るだけ）
+                mob.getNavigation().stop();
+
+                Vec3d to = target.getPos().subtract(mob.getPos());
+                Vec3d flat = new Vec3d(to.x, 0, to.z);
+                if (flat.lengthSquared() > 1e-6) {
+                    Vec3d dir = flat.normalize().multiply(0.06); // 寄る強さ：0.03〜0.10で調整
+                    mob.addVelocity(dir.x, 0, dir.z);
+                    mob.velocityDirty = true;
+                }
+
+                // 向きは敵へ
+                mob.getLookControl().lookAt(target.getX(), target.getEyeY(), target.getZ(), 70f, 70f);
+                return;
+            }
+
+            // 地上は今まで通り
             tryMoveTowardTarget(COMBAT_CHASE_SPEED, spec);
             lookMoveDirection();
             return;
         }
+
 
         // ===== 見えない：角度変えるために軽く寄る =====
         if (!mob.getVisibilityCache().canSee(target)) {
@@ -226,12 +252,15 @@ public class StudentCombatGoal extends Goal {
         if (noActionTicks >= FORCE_FIRE_TICKS) {
             noActionTicks = 0;
 
+            // ★クールダウン中は何もしない
+            if (cooldown > 0) return;
+
             mob.getNavigation().stop();
             mob.getLookControl().lookAt(target, 200.0f, 200.0f); // 速めでOK
 
             // A案：キュー方式なら
             student.queueFire(target);
-            student.requestShot(target); // モーションだけ先に出したいなら
+            //student.requestShot(target); // モーションだけ先に出したいなら
 
             // B案：ここで実射撃してしまうなら（今のWeaponActionを呼ぶ）
             // boolean fired2 = switch (spec.type) {...};
@@ -332,6 +361,23 @@ public class StudentCombatGoal extends Goal {
 
         mob.getNavigation().startMovingTo(pos.x, pos.y, pos.z, speed);
     }
+
+    private void tryTriggerSkill(WeaponSpec spec, double dist) {
+        if (!(mob instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity se)) return;
+        if (!se.canStartSkill()) return;
+
+        // 戦闘中に「たまに」発動（確率 or 条件）
+        // 例：10秒に1回チャンス（200tickに1回）
+        if (mob.age % 200 != 0) return;
+
+        // 例：条件（キャラ別にここで分けず、handler側のshouldStartでもOK）
+        se.startSkillNow();
+    }
+
+    private boolean isFlyingMob() {
+        return (mob instanceof com.licht_meilleur.blue_student.entity.HinaEntity hina) && hina.isFlying();
+    }
+
 
 
 

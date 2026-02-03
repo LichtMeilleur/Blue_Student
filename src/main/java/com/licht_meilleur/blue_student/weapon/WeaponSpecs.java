@@ -94,7 +94,7 @@ public class WeaponSpecs {
             // アリス：遠距離 高ダメ（後でレールガンに変更しやすい）
             case ALICE -> WeaponSpec.hitscan(
                     40,
-                    60,
+                    40,
                     18f,
                     0f,     // projectileSpeedは使わない（hitscan）
                     0f,
@@ -104,7 +104,7 @@ public class WeaponSpecs {
                     10.0,
                     18.0,
                     1,
-                    60,
+                    40,
                     0,
                     6.0,
                     true,           // infiniteAmmo
