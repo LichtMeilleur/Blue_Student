@@ -47,7 +47,7 @@ public class StudentFollowGoal extends Goal {
         this.mob = mob;
         this.student = student;
         this.speed = speed;
-        this.setControls(EnumSet.of(Control.MOVE, Control.LOOK));
+        this.setControls(EnumSet.of(Control.MOVE));
     }
 
     @Override
@@ -227,12 +227,11 @@ public class StudentFollowGoal extends Goal {
         Vec3d v = mob.getVelocity();
         Vec3d hv = new Vec3d(v.x, 0, v.z);
         if (hv.lengthSquared() > 1.0e-4) {
-            Vec3d p = mob.getPos().add(hv.normalize().multiply(2.0));
-            mob.getLookControl().lookAt(p.x, mob.getEyeY(), p.z, 60.0f, 60.0f);
+
             return;
         }
         // 動いてない時だけオーナーを見る
-        mob.getLookControl().lookAt(owner, 30.0f, 30.0f);
+        student.requestLookMoveDir(10, 2);
     }
 
     private PlayerEntity resolveOwnerOnly() {

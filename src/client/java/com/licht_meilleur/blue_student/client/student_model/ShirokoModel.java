@@ -44,7 +44,7 @@ public class ShirokoModel extends GeoModel<ShirokoEntity> {
 
         // 腕：左右±35°, 上45°/下20°（銃っぽい範囲）
         float armYawDeg    = clamp(data.netHeadYaw(), -35f, 35f);
-        float armPitchDeg  = clamp(data.headPitch(), -20f, 45f);
+        float armPitchDeg  = clamp(data.headPitch(), -45f, 45f);
 
         float headPitchRad = degToRad(headPitchDeg);
         float headYawRad   = degToRad(headYawDeg);

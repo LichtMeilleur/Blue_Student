@@ -56,7 +56,7 @@ public class StudentEatGoal extends Goal {
         this.healAmount = healAmount;
 
         // 食べてる間は MOVE/LOOK を握って止める
-        this.setControls(EnumSet.of(Control.MOVE, Control.LOOK));
+        this.setControls(EnumSet.of(Control.MOVE));
     }
 
     @Override

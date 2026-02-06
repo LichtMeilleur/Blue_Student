@@ -39,26 +39,34 @@ public class ClientPackets {
             client.execute(() -> {
                 ClientWorld w = MinecraftClient.getInstance().world;
                 if (w == null) return;
+                Vec3d start2 = start;
+
+// ★ shooter が AbstractStudentEntity なら muzzle ボーン位置を優先（見た目だけ）
+                Entity shooter = w.getEntityById(shooterId);
+                if (shooter instanceof AbstractStudentEntity se) {
+                    start2 = se.getClientMuzzleWorldPosOrApprox();
+                }
+
 
                 WeaponSpec.FxType fxType = WeaponSpec.FxType.values()[fxTypeOrd];
 
                 // muzzle flash
                 for (int i = 0; i < 6; i++) {
-                    double sx = start.x + (w.random.nextDouble() - 0.5) * 0.05;
-                    double sy = start.y + (w.random.nextDouble() - 0.5) * 0.05;
-                    double sz = start.z + (w.random.nextDouble() - 0.5) * 0.05;
+                    double sx = start2.x + (w.random.nextDouble() - 0.5) * 0.05;
+                    double sy = start2.y + (w.random.nextDouble() - 0.5) * 0.05;
+                    double sz = start2.z + (w.random.nextDouble() - 0.5) * 0.05;
                     w.addParticle(ParticleTypes.FLAME, sx, sy, sz, 0, 0, 0);
                 }
 
                 switch (fxType) {
                     case BULLET -> {
-                        if (dirs.length > 0) spawnOneTracer(w, start, dirs[0]);
+                        if (dirs.length > 0) spawnOneTracer(w, start2, dirs[0]);
                     }
                     case SHOTGUN -> {
-                        for (Vec3d d : dirs) spawnOneTracer(w, start, d);
+                        for (Vec3d d : dirs) spawnOneTracer(w, start2, d);
                     }
                     case RAILGUN -> {
-                        spawnRailShot(w, start, dirs[0], fxWidth, travelDist);
+                        spawnRailShot(w, start2, dirs[0], fxWidth, travelDist);
                     }
 
 
@@ -67,18 +75,18 @@ public class ClientPackets {
             });
         });
     }
-    private static void spawnOneTracer(ClientWorld w, Vec3d start, Vec3d dir) {
+    private static void spawnOneTracer(ClientWorld w, Vec3d start2, Vec3d dir) {
         Vec3d d = dir.normalize();
         Vec3d v = d.multiply(3.2);
 
         // 芯（光る）
-        w.addParticle(ParticleTypes.END_ROD, true, start.x, start.y, start.z, v.x, v.y, v.z);
+        w.addParticle(ParticleTypes.END_ROD, true, start2.x, start2.y, start2.z, v.x, v.y, v.z);
 
         // 火花（見えやすい）
-        w.addParticle(ParticleTypes.CRIT, true, start.x, start.y, start.z, v.x * 0.6, v.y * 0.6, v.z * 0.6);
+        w.addParticle(ParticleTypes.CRIT, true, start2.x, start2.y, start2.z, v.x * 0.6, v.y * 0.6, v.z * 0.6);
 
         // ちょい煙（任意）
-        w.addParticle(ParticleTypes.SMOKE, true, start.x, start.y, start.z, v.x * 0.15, v.y * 0.15, v.z * 0.15);
+        w.addParticle(ParticleTypes.SMOKE, true, start2.x, start2.y, start2.z, v.x * 0.15, v.y * 0.15, v.z * 0.15);
     }
 
 
@@ -88,7 +96,7 @@ public class ClientPackets {
 
 
 
-    private static void spawnRailShot(ClientWorld w, Vec3d start, Vec3d dir, float fxWidth, float travelDist) {
+    private static void spawnRailShot(ClientWorld w, Vec3d start2, Vec3d dir, float fxWidth, float travelDist) {
 
         Vec3d d = dir.normalize();
 
@@ -101,7 +109,7 @@ public class ClientPackets {
         for (int i = 0; i < count; i++) {
 
             // ★進行方向に並べる（ここが今回のポイント）
-            Vec3d pos = start.add(d.multiply(gap * i));
+            Vec3d pos = start2.add(d.multiply(gap * i));
 
             // 青い炎の塊
             w.addParticle(
@@ -126,7 +134,7 @@ public class ClientPackets {
 
         // 発射音
         w.playSound(
-                start.x, start.y, start.z,
+                start2.x, start2.y, start2.z,
                 SoundEvents.BLOCK_BEACON_POWER_SELECT,
                 SoundCategory.PLAYERS,
                 0.9f,

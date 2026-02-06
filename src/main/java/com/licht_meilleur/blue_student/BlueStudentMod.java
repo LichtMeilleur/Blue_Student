@@ -145,6 +145,8 @@ public class BlueStudentMod implements ModInitializer {
         FabricDefaultAttributeRegistry.register(KISAKI, AbstractStudentEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(ALICE, AbstractStudentEntity.createAttributes());
         //FabricDefaultAttributeRegistry.register(HOSHINO, AbstractStudentEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(HINA, HinaEntity.createAttributes());
+
 
         ModScreenHandlers.register();
 

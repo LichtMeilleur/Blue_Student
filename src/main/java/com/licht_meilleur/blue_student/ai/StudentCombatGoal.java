@@ -27,7 +27,7 @@ public class StudentCombatGoal extends Goal {
     private final WeaponAction projectileAction = new ProjectileWeaponAction();
     private final WeaponAction hitscanAction = new HitscanWeaponAction();
 
-    private float cooldown = 0f;
+    private int cooldown = 0;
     private LivingEntity target;
 
     private static final double COMBAT_CHASE_SPEED = 1.35;
@@ -49,7 +49,7 @@ public class StudentCombatGoal extends Goal {
     public StudentCombatGoal(PathAwareEntity mob, IStudentEntity student) {
         this.mob = mob;
         this.student = student;
-        this.setControls(EnumSet.of(Control.MOVE, Control.LOOK));
+        this.setControls(EnumSet.of(Control.MOVE));
     }
 
     @Override
@@ -91,9 +91,11 @@ public class StudentCombatGoal extends Goal {
 
     @Override
     public void tick() {
+        boolean flying = (mob instanceof com.licht_meilleur.blue_student.entity.HinaEntity hina) && hina.isFlying();
+
         if (!(mob.getWorld() instanceof ServerWorld)) return;
 
-        if (cooldown > 0) cooldown -= 1f;
+        if (cooldown > 0) cooldown -= 1;
         if (repathCooldown > 0) repathCooldown--;
 
         if (target == null || !target.isAlive()) {
@@ -102,46 +104,36 @@ public class StudentCombatGoal extends Goal {
             return;
         }
 
-
-
         WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId());
-        double dx = target.getX() - mob.getX();
-        double dz = target.getZ() - mob.getZ();
-        double distH = Math.sqrt(dx*dx + dz*dz);      // 水平距離
-        double dist3 = mob.distanceTo(target);        // 3D距離（必要なら）
-        double dist = isFlyingMob() ? distH : dist3;  // ★飛行中は水平で見る
-
+        double dist = mob.distanceTo(target);
 
         // ===== 追う（理想距離へ）=====
-        if (dist > spec.preferredMaxRange || dist > spec.range) {
-            if (isFlyingMob()) {
-                // ★飛行中：地上ナビで追わない（撃てる距離になるまで少し寄るだけ）
-                mob.getNavigation().stop();
-
-                Vec3d to = target.getPos().subtract(mob.getPos());
-                Vec3d flat = new Vec3d(to.x, 0, to.z);
-                if (flat.lengthSquared() > 1e-6) {
-                    Vec3d dir = flat.normalize().multiply(0.06); // 寄る強さ：0.03〜0.10で調整
-                    mob.addVelocity(dir.x, 0, dir.z);
-                    mob.velocityDirty = true;
-                }
-
-                // 向きは敵へ
-                mob.getLookControl().lookAt(target.getX(), target.getEyeY(), target.getZ(), 70f, 70f);
+        // ===== 追う（理想距離へ）=====
+        if (!flying) {
+            if (dist > spec.preferredMaxRange || dist > spec.range) {
+                tryMoveTowardTarget(COMBAT_CHASE_SPEED, spec);
                 return;
             }
 
-            // 地上は今まで通り
-            tryMoveTowardTarget(COMBAT_CHASE_SPEED, spec);
-            lookMoveDirection();
-            return;
+            if (!mob.getVisibilityCache().canSee(target)) {
+                tryMoveTowardTarget(COMBAT_AIM_SPEED, spec);
+                return;
+            }
+
+            if (dist < spec.preferredMinRange) {
+                mob.getNavigation().stop();
+                return;
+            }
         }
+
+// ★飛行中は「位置取りはHinaStrafeFlyGoalに任せる」
+// ここから下（リロード/射撃キュー）は今まで通り
 
 
         // ===== 見えない：角度変えるために軽く寄る =====
         if (!mob.getVisibilityCache().canSee(target)) {
             tryMoveTowardTarget(COMBAT_AIM_SPEED, spec);
-            lookMoveDirection();
+
             return;
         }
 
@@ -162,11 +154,11 @@ public class StudentCombatGoal extends Goal {
             // リロード中はパニック距離なら下がる/位置調整（簡易）
             if (dist < spec.panicRange) {
                 tryMoveAwayFromTarget(COMBAT_CHASE_SPEED, spec);
-                lookMoveDirection();
+
             } else {
                 // 近すぎなければ停止して落ち着いてリロード
                 mob.getNavigation().stop();
-                lookMoveDirection(); // 進行方向を向く（見た目用）
+
             }
             return;
         }
@@ -175,7 +167,7 @@ public class StudentCombatGoal extends Goal {
         if (student.getAmmoInMag() <= 0 && !spec.infiniteAmmo) {
             if (dist < spec.panicRange) {
                 tryMoveAwayFromTarget(COMBAT_CHASE_SPEED, spec);
-                lookMoveDirection();
+
             } else {
                 student.startReload(spec);
                 mob.getNavigation().stop();
@@ -188,7 +180,7 @@ public class StudentCombatGoal extends Goal {
             // 近いならまず距離を取ってから
             if (dist < spec.panicRange) {
                 tryMoveAwayFromTarget(COMBAT_CHASE_SPEED, spec);
-                lookMoveDirection();
+
             } else {
                 student.startReload(spec);
                 mob.getNavigation().stop();
@@ -196,76 +188,25 @@ public class StudentCombatGoal extends Goal {
             return;
         }
 
-        // =========================================================
+// =========================================================
 // ★射撃（照準は毎tick維持）
 // =========================================================
-        mob.getNavigation().stop();
 
-// 目線を狙う（自然）
-        double tx = target.getX();
-        double ty = target.getEyeY();
-        double tz = target.getZ();
+// まず照準だけは維持（cooldown中でもOK）
+        student.requestLookTarget(target, 50, 2);
 
-// 追従の速さ：左右/上下（ここが“向くスピード”）
-        float yawSpeed = 70.0f;   // 30→70くらいが体感良いこと多い
-        float pitchSpeed = 70.0f;
+// 飛行してないなら足を止める（射撃の安定）
+        if (!flying) mob.getNavigation().stop();
 
-        mob.getLookControl().lookAt(tx, ty, tz, yawSpeed, pitchSpeed);
-
-// ここでは実射撃しない（AimFireGoalに任せる）
+// ★クールダウン中は「キューを積まない」
         if (cooldown > 0) return;
 
-// ★撃ちたい意思だけキュー
+// ★撃ちたい意思だけキュー（ここだけ！）
         student.queueFire(target);
 
-// 連射間隔はCombat側で管理（今まで通り）
+// ★連射間隔はCombat側で管理
         cooldown = spec.cooldownTicks;
 
-
-        boolean inRange = dist <= spec.range;
-        boolean standing =
-                mob.getNavigation().isIdle() &&
-                        mob.getVelocity().horizontalLengthSquared() < 0.0002 &&
-                        mob.getPos().squaredDistanceTo(lastPos) < STILL_EPS2;
-
-        lastPos = mob.getPos();
-
-// 「撃った／回避した／追いかけた」など、行動したならここで noActionTicks をリセットしたい
-        boolean didSomethingThisTick = false;
-
-// 例：あなたのコードで fired が取れるならそれでOK
-// didSomethingThisTick |= fired;
-
-// 例：ナビが動いてたら「行動中」とみなす
-        if (!mob.getNavigation().isIdle()) didSomethingThisTick = true;
-
-// 例：速度があるなら移動中
-        if (mob.getVelocity().horizontalLengthSquared() > 0.002) didSomethingThisTick = true;
-
-        if (inRange && standing && !didSomethingThisTick) {
-            noActionTicks++;
-        } else {
-            noActionTicks = 0;
-        }
-
-// ★一定tick棒立ちなら “強制攻撃”
-        if (noActionTicks >= FORCE_FIRE_TICKS) {
-            noActionTicks = 0;
-
-            // ★クールダウン中は何もしない
-            if (cooldown > 0) return;
-
-            mob.getNavigation().stop();
-            mob.getLookControl().lookAt(target, 200.0f, 200.0f); // 速めでOK
-
-            // A案：キュー方式なら
-            student.queueFire(target);
-            //student.requestShot(target); // モーションだけ先に出したいなら
-
-            // B案：ここで実射撃してしまうなら（今のWeaponActionを呼ぶ）
-            // boolean fired2 = switch (spec.type) {...};
-            // if (fired2) cooldown = spec.cooldownTicks;
-        }
 
         return;
 
@@ -334,14 +275,7 @@ public class StudentCombatGoal extends Goal {
 
         return found;
     }
-    private void lookMoveDirection() {
-        Vec3d v = mob.getVelocity();
-        Vec3d hv = new Vec3d(v.x, 0, v.z);
-        if (hv.lengthSquared() < 1.0e-4) return;
 
-        Vec3d p = mob.getPos().add(hv.normalize().multiply(2.0));
-        mob.getLookControl().lookAt(p.x, mob.getEyeY(), p.z, 60.0f, 60.0f);
-    }
     private void tryMoveAwayFromTarget(double speed, WeaponSpec spec) {
         if (repathCooldown > 0) return;
         repathCooldown = REPATH_INTERVAL;
@@ -372,10 +306,6 @@ public class StudentCombatGoal extends Goal {
 
         // 例：条件（キャラ別にここで分けず、handler側のshouldStartでもOK）
         se.startSkillNow();
-    }
-
-    private boolean isFlyingMob() {
-        return (mob instanceof com.licht_meilleur.blue_student.entity.HinaEntity hina) && hina.isFlying();
     }
 
 

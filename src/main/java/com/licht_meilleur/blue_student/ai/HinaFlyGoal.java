@@ -13,7 +13,6 @@ public class HinaFlyGoal extends Goal {
     public HinaFlyGoal(HinaEntity mob, IStudentEntity student) {
         this.mob = mob;
         this.student = student;
-        this.setControls(EnumSet.of(Control.LOOK));
     }
 
     @Override

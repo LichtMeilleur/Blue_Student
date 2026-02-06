@@ -40,6 +40,9 @@ public class WeaponSpec {
     public final float fxWidth;
     // レールガン太さ用（散弾/通常は0でOK）
 
+    public final int animShotHoldTicks;
+
+
     public WeaponSpec(
             Type type,
             double range,
@@ -58,7 +61,8 @@ public class WeaponSpec {
             double panicRange,
             boolean infiniteAmmo,
             FxType fxType,
-            float fxWidth
+            float fxWidth,
+            int animShotHoldTicks
 
     ) {
         this.type = type;
@@ -79,6 +83,7 @@ public class WeaponSpec {
         this.infiniteAmmo = infiniteAmmo;
         this.fxType = fxType;
         this.fxWidth = fxWidth;
+        this.animShotHoldTicks = animShotHoldTicks;
 
     }
 
@@ -93,10 +98,11 @@ public class WeaponSpec {
             double panicRange,
             boolean infiniteAmmo,
             FxType fxType,
-            float fxWidth
+            float fxWidth,
+            int animShotHoldTicks
     ) {
         return new WeaponSpec(Type.PROJECTILE, range, cooldownTicks, damage,
-                projectileSpeed, spreadRad, pellets, knockback, bypassIFrames,preferredMinRange,preferredMaxRange, magSize, reloadTicks, reloadStartAmmo, panicRange,infiniteAmmo,fxType,fxWidth);
+                projectileSpeed, spreadRad, pellets, knockback, bypassIFrames,preferredMinRange,preferredMaxRange, magSize, reloadTicks, reloadStartAmmo, panicRange,infiniteAmmo,fxType,fxWidth, animShotHoldTicks);
     }
     public static WeaponSpec hitscan(
             double range, int cooldownTicks, float damage,
@@ -109,10 +115,11 @@ public class WeaponSpec {
             double panicRange,
             boolean infiniteAmmo,
             FxType fxType,
-            float fxWidth
+            float fxWidth,
+            int animShotHoldTicks
     ) {
         return new WeaponSpec(Type.HITSCAN, range, cooldownTicks, damage,
-                projectileSpeed, spreadRad, pellets, knockback, bypassIFrames,preferredMinRange,preferredMaxRange, magSize, reloadTicks, reloadStartAmmo, panicRange,infiniteAmmo,fxType,fxWidth);
+                projectileSpeed, spreadRad, pellets, knockback, bypassIFrames,preferredMinRange,preferredMaxRange, magSize, reloadTicks, reloadStartAmmo, panicRange,infiniteAmmo,fxType,fxWidth, animShotHoldTicks);
     }
 
 

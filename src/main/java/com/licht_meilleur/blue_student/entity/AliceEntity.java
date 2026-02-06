@@ -55,29 +55,29 @@ public class AliceEntity extends AbstractStudentEntity {
         return super.interactMob(player, hand);
     }
 
-    @Override
     protected void initGoals() {
-        this.goalSelector.add(0, new StudentRideWithOwnerGoal (this, this));
+        this.goalSelector.add(0, new StudentRideWithOwnerGoal(this, this));
         this.goalSelector.add(1, new SwimGoal(this));
-        this.goalSelector.add(2, new StudentAimFireGoal(this, this));
+
+        // ★Aim（向き＋射撃）: LOOK担当
+        this.goalSelector.add(2, new StudentAimGoal(this, this));
+
+        // 詰まり脱出（MOVE）
         this.goalSelector.add(3, new StudentStuckEscapeGoal(this, this));
-        this.goalSelector.add(4, new EscapeDangerGoal(this, 1.25));
-        this.goalSelector.add(5,
-                new StudentReturnToOwnerGoal(this, this,
-                        1.35,   // speed（追いつけるよう少し速め）
-                        28.0,   // triggerDist
-                        2.5,    // stopDist（2〜3ブロ）
-                        48.0,   // teleportDist（48以上で救済）
-                        20      // stuckTriggerTicks（1秒くらい）
-                ));
-        // 逃げAI（安定）
-        this.goalSelector.add(6, new net.minecraft.entity.ai.goal.FleeEntityGoal<>(
-               this, HostileEntity.class, 8.0f, 1.0, 1.35
-        ));
-        this.goalSelector.add(7, new StudentCombatGoal(this, this));
-        this.goalSelector.add(8, new StudentEvadeGoal(this,this));
 
+        // 回避（MOVE） ※Combatより上
+        this.goalSelector.add(4, new StudentEvadeGoal(this, this));
 
+        // 危険回避（バニラ） ※必要ならここ（ただし強すぎるなら外す）
+        this.goalSelector.add(5, new EscapeDangerGoal(this, 1.25));
+
+        this.goalSelector.add(6, new StudentReturnToOwnerGoal(this, this, 1.35, 28.0, 2.5, 48.0, 20));
+
+        // 角詰まり用（強いので優先度低め推奨）
+        this.goalSelector.add(7, new net.minecraft.entity.ai.goal.FleeEntityGoal<>(this, HostileEntity.class, 8.0f, 1.0, 1.35));
+
+        // 戦闘（MOVE + 射撃キュー）
+        this.goalSelector.add(8, new StudentCombatGoal(this, this));
 
         this.goalSelector.add(9, new StudentFollowGoal(this, this, 1.1));
         this.goalSelector.add(10, new StudentSecurityGoal(this, this,
@@ -85,8 +85,7 @@ public class AliceEntity extends AbstractStudentEntity {
                     @Override public BlockPos getSecurityPos() { return AliceEntity.this.getSecurityPos(); }
                     @Override public void setSecurityPos(BlockPos pos) { AliceEntity.this.setSecurityPos(pos); }
                 },
-                1.0
-        ));
+                1.0));
         this.goalSelector.add(11, new StudentEatGoal(this, this));
     }
 

@@ -5,8 +5,11 @@ import com.licht_meilleur.blue_student.bed.BedLinkManager;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
 import com.licht_meilleur.blue_student.student.StudentId;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.ai.control.FlightMoveControl;
 import net.minecraft.entity.ai.goal.EscapeDangerGoal;
 import net.minecraft.entity.ai.goal.SwimGoal;
+import net.minecraft.entity.ai.pathing.EntityNavigation;
+import net.minecraft.entity.attribute.DefaultAttributeContainer;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
@@ -24,6 +27,9 @@ import software.bernie.geckolib.core.animation.RawAnimation;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import java.util.UUID;
+import net.minecraft.entity.ai.pathing.BirdNavigation;
+import net.minecraft.entity.ai.control.FlightMoveControl;
+
 
 public class HinaEntity extends AbstractStudentEntity {
 
@@ -34,7 +40,8 @@ public class HinaEntity extends AbstractStudentEntity {
     public static final String ANIM_FLY_SHOT = "animation.model.fly_shot";
 
     private static final RawAnimation FLY = RawAnimation.begin().thenLoop(ANIM_FLY);
-    private static final RawAnimation FLY_SHOT = RawAnimation.begin().thenPlay(ANIM_FLY_SHOT);
+    private static final RawAnimation FLY_SHOT = RawAnimation.begin().thenLoop(ANIM_FLY_SHOT);
+
 
     // ===== Hina Fly Skill Params =====
     private static final int FLY_DURATION_TICKS  = 20 * 20;  // 20秒
@@ -60,6 +67,12 @@ public class HinaEntity extends AbstractStudentEntity {
     public boolean isFlyLanding() { return this.dataTracker.get(LANDING_T); }
     public boolean isFlyShooting() { return this.dataTracker.get(FLY_SHOOT_T); }
     public void setFlyShooting(boolean v) { this.dataTracker.set(FLY_SHOOT_T, v); }
+    private int flyShotPulseTicks = 0;
+    // スキル終了後の落下無効猶予
+    private int noFallTicks = 0;
+    private static final int NO_FALL_GRACE_TICKS = 20 * 10; // 10秒ぶん“有効期間”
+    private boolean wasOnGround = true;
+
 
     private static final UUID FLY_SPEED_UUID =
             UUID.fromString("f0b8c8a4-2c1f-4c9a-8a3a-6d7c2f3c1b11");
@@ -67,6 +80,7 @@ public class HinaEntity extends AbstractStudentEntity {
 
     public HinaEntity(EntityType<? extends AbstractStudentEntity> type, World world) {
         super(type, world);
+        this.moveControl = new FlightMoveControl(this, 20, true);
     }
 
     @Override
@@ -98,49 +112,70 @@ public class HinaEntity extends AbstractStudentEntity {
         return super.interactMob(player, hand);
     }
 
-    @Override
     protected void initGoals() {
         this.goalSelector.add(0, new StudentRideWithOwnerGoal(this, this));
         this.goalSelector.add(1, new SwimGoal(this));
 
-        // fly_shot アニメ用スイッチ
-        this.goalSelector.add(2, new HinaFlyGoal(this, this));
+        this.goalSelector.add(2, new StudentStuckEscapeGoal(this, this));
+        this.goalSelector.add(3, new EscapeDangerGoal(this, 1.25));
 
-        this.goalSelector.add(3, new StudentAimFireGoal(this, this));
-        this.goalSelector.add(4, new StudentStuckEscapeGoal(this, this));
-        this.goalSelector.add(5, new EscapeDangerGoal(this, 1.25));
+// ★飛行の位置取り（MOVE）
+       // this.goalSelector.add(4, new HinaStrafeFlyGoal(this, this));
+        this.goalSelector.add(4, new HinaAirCombatGoal(this, this));
+// ★Combat（射撃キュー＆リロード）※飛行中は移動しないよう修正した前提
+        this.goalSelector.add(5, new StudentCombatGoal(this, this));
 
-        this.goalSelector.add(6,
-                new StudentReturnToOwnerGoal(this, this,
-                        1.35, 28.0, 2.5, 48.0, 20
-                ));
+// ★Aim（LOOK＋実射撃）
+        this.goalSelector.add(6, new StudentAimGoal(this, this));
 
-        this.goalSelector.add(7, new net.minecraft.entity.ai.goal.FleeEntityGoal<>(
-                this, HostileEntity.class, 8.0f, 1.0, 1.35
-        ));
+// ★演出フラグ（あってもなくても）
+// ※今のHinaFlyGoalは hasQueuedFire が条件なので、入れても害は少ない
+        this.goalSelector.add(7, new HinaFlyGoal(this, this));
 
-        this.goalSelector.add(8, new StudentCombatGoal(this, this));
-        this.goalSelector.add(9, new StudentEvadeGoal(this, this));
-
+        this.goalSelector.add(9, new StudentReturnToOwnerGoal(this, this, 1.35, 28.0, 2.5, 48.0, 20));
         this.goalSelector.add(10, new StudentFollowGoal(this, this, 1.1));
+
         this.goalSelector.add(11, new StudentSecurityGoal(this, this,
                 new StudentSecurityGoal.ISecurityPosProvider() {
                     @Override public BlockPos getSecurityPos() { return HinaEntity.this.getSecurityPos(); }
                     @Override public void setSecurityPos(BlockPos pos) { HinaEntity.this.setSecurityPos(pos); }
                 },
-                1.0
-        ));
+                1.0));
         this.goalSelector.add(12, new StudentEatGoal(this, this));
     }
+
+    public static DefaultAttributeContainer.Builder createAttributes() {
+        return AbstractStudentEntity.createAttributes()
+                // 既に movement_speed 等があるならそのままでOK
+                .add(EntityAttributes.GENERIC_FLYING_SPEED, 1.8); // ★ここが必須
+    }
+
 
     @Override
     public void tick() {
         super.tick();
 
         // ★サーバーだけ進行
+        if (!this.getWorld().isClient && noFallTicks > 0) {
+            noFallTicks--;
+        }
+
         if (!this.getWorld().isClient && this.getWorld() instanceof ServerWorld sw) {
             tickFlySkill(sw);
         }
+        // fly_shot パルスの減算（サーバーのみでOK）
+        if (!this.getWorld().isClient) {
+            if (flyShotPulseTicks > 0) {
+                flyShotPulseTicks--;
+                if (flyShotPulseTicks == 0) {
+                    this.dataTracker.set(FLY_SHOOT_T, false);
+                }
+            }
+        }
+        if (!this.getWorld().isClient) {
+            if (noFallTicks > 0) noFallTicks--;
+        }
+
 
     }
 
@@ -183,7 +218,11 @@ public class HinaEntity extends AbstractStudentEntity {
 
         // ---- 非発動中：条件を満たせば発動 ----
         if (flyCooldownTicks <= 0) {
-            boolean danger = hasNearbyEnemy(sw) || hasIncomingProjectile(sw);
+            boolean danger =
+                    hasNearbyEnemy(sw)
+                            || hasIncomingProjectile(sw)
+                            || this.hurtTime > 0;  // ★最近ダメージ受けたら飛ぶ
+
             if (danger) {
                 startFlySkill();
             }
@@ -287,6 +326,8 @@ public class HinaEntity extends AbstractStudentEntity {
         flyCooldownTicks = FLY_COOLDOWN_TICKS; // ★着地後にCT開始
         landingTicksLeft = 0;
         applyFlySpeed(false);
+        noFallTicks = NO_FALL_GRACE_TICKS;
+
     }
 
     private void stopFlyImmediately() {
@@ -298,26 +339,50 @@ public class HinaEntity extends AbstractStudentEntity {
         this.fallDistance = 0.0f;
         landingTicksLeft = 0;
         applyFlySpeed(false);
+        noFallTicks = NO_FALL_GRACE_TICKS;
+
     }
 
     @Override
     protected RawAnimation getOverrideAnimationIfAny() {
         if (isFlying()) {
-            if (isFlyShooting()) return FLY_SHOT;
+            // ★「撃つ予定(キュー)」ではなく「撃った演出(shot ticks)」で判定する
+            if (this.getClientShotTicksForAnim() > 0) return FLY_SHOT;
             return FLY;
         }
         return null;
     }
 
+
+
+
+
     @Override
     public boolean handleFallDamage(float fallDistance, float damageMultiplier, DamageSource source) {
-        if (this.isFlying() || this.isFlyLanding()) return false;
+
+        boolean blocked = this.isFlying() || this.isFlyLanding() || noFallTicks > 0;
+
+       /* System.out.println(
+                "[HinaFall] fd=" + fallDistance +
+                        " flying=" + isFlying() +
+                        " landing=" + isFlyLanding() +
+                        " noFall=" + noFallTicks +
+                        " blocked=" + blocked+
+                " active=" + flyActiveTicks +
+                        " cd=" + flyCooldownTicks +
+                        " landingLeft=" + landingTicksLeft
+        );*/
+
+        if (blocked) return false;
         return super.handleFallDamage(fallDistance, damageMultiplier, source);
     }
 
+
+
+
     // ===== danger detection =====
     private boolean hasNearbyEnemy(ServerWorld sw) {
-        var box = this.getBoundingBox().expand(2.0);
+        var box = this.getBoundingBox().expand(8.0);
         return !sw.getEntitiesByClass(
                 net.minecraft.entity.mob.HostileEntity.class,
                 box,
@@ -363,9 +428,88 @@ public class HinaEntity extends AbstractStudentEntity {
         ms.removeModifier(FLY_SPEED_UUID);
         if (on) {
             ms.addPersistentModifier(new EntityAttributeModifier(
-                    FLY_SPEED_UUID, "hina_fly_speed", 0.35, // +35%（好みで0.2〜0.6）
+                    FLY_SPEED_UUID, "hina_fly_speed", 0.6, // +35%（好みで0.2〜0.6）
                     EntityAttributeModifier.Operation.MULTIPLY_TOTAL
             ));
         }
     }
+
+    // ===== fly_shot を短時間だけONにする（AimFireGoalから呼ぶ）=====
+    public void beginFlyShotPulse(int ticks) {
+        // 飛行してないなら何もしない
+        if (!isFlying()) return;
+
+        // いったんON
+        this.dataTracker.set(FLY_SHOOT_T, true);
+
+        // ticks後にOFFへ戻す（サーバー側で管理したいので age を使っても良いが、最小なら tickで消す）
+        // ここでは簡易：フィールドでカウントする
+        this.flyShotPulseTicks = Math.max(this.flyShotPulseTicks, ticks);
+    }
+
+    @Override
+    protected EntityNavigation createNavigation(World world) {
+        return new BirdNavigation(this, world);
+    }
+
+    @Override
+    public void tickMovement() {
+        super.tickMovement();
+
+        if (this.getWorld().isClient) return;
+
+        if (isFlying() || isFlyLanding()) {
+            this.setNoGravity(true);
+            this.fallDistance = 0;
+
+            // ★暴走対策：速度を上限でクランプ
+            Vec3d v = this.getVelocity();
+
+            double maxH = 0.9;  // 水平最大（まず 0.6〜1.2）
+            double maxYUp = 0.45;
+            double maxYDown = -0.60;
+
+            double hxz = Math.sqrt(v.x * v.x + v.z * v.z);
+            if (hxz > maxH) {
+                double s = maxH / hxz;
+                v = new Vec3d(v.x * s, v.y, v.z * s);
+            }
+
+            if (v.y > maxYUp) v = new Vec3d(v.x, maxYUp, v.z);
+            if (v.y < maxYDown) v = new Vec3d(v.x, maxYDown, v.z);
+
+            this.setVelocity(v);
+            this.velocityDirty = true;
+
+        } else {
+            this.setNoGravity(false);
+        }
+        // ★ super.tickMovement() より前にやる
+        boolean air = this.isFlying() || this.isFlyLanding();
+
+        if (air) {
+            this.setNoGravity(true);
+            this.fallDistance = 0.0f;
+        }
+
+        super.tickMovement();
+
+        // ★念のため、飛行/着地中は毎tick 0 にしておく
+        if (air) {
+            this.fallDistance = 0.0f;
+        } else {
+            this.setNoGravity(false);
+        }
+
+        Vec3d v = getVelocity();
+        double sp = v.length();
+        if (sp > 2.0) {
+            System.out.println("[HinaFlySpike] sp=" + sp + " v=" + v +
+                    " flyingSpeed=" + getAttributeValue(EntityAttributes.GENERIC_FLYING_SPEED) +
+                    " moveSpeed=" + getAttributeValue(EntityAttributes.GENERIC_MOVEMENT_SPEED));
+        }
+
+    }
+
+
 }

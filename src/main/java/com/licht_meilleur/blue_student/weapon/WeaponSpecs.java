@@ -25,7 +25,8 @@ public class WeaponSpecs {
                     5.0,    // panicRange
                     false,          // infiniteAmmo
                     WeaponSpec.FxType.BULLET,   // fxType
-                    1.0f    // fxWidth
+                    1.0f,    // fxWidth
+                    6   //animationTicks
             );
 
             // ホシノ：近〜中距離 ショットガン想定（散弾）
@@ -46,7 +47,8 @@ public class WeaponSpecs {
                     4.0,            // panicRange
                     false,           // infiniteAmmo
                     WeaponSpec.FxType.SHOTGUN,   // fxType
-                    3.0f    // fxWidth
+                    3.0f,    // fxWidth
+                    12
             );
 
             // ヒナ：遠距離 高レート
@@ -67,7 +69,8 @@ public class WeaponSpecs {
                     5.0,
                     false,           // infiniteAmmo
                     WeaponSpec.FxType.BULLET,   // fxType
-                    1.0f    // fxWidth
+                    1.0f,    // fxWidth
+                    6
             );
 
             // キサキ：中〜遠距離（命中寄り）
@@ -88,13 +91,14 @@ public class WeaponSpecs {
                     5.0,
                     false,           // infiniteAmmo
                     WeaponSpec.FxType.BULLET,   // fxType
-                    1.0f    // fxWidth
+                    1.0f,    // fxWidth
+                    6
             );
 
             // アリス：遠距離 高ダメ（後でレールガンに変更しやすい）
             case ALICE -> WeaponSpec.hitscan(
                     40,
-                    40,
+                    20,
                     18f,
                     0f,     // projectileSpeedは使わない（hitscan）
                     0f,
@@ -104,12 +108,13 @@ public class WeaponSpecs {
                     10.0,
                     18.0,
                     1,
-                    40,
+                    20,
                     0,
                     6.0,
                     true,           // infiniteAmmo
                     WeaponSpec.FxType.RAILGUN,   // fxType
-                    2.0f    // fxWidth
+                    2.0f,    // fxWidth
+                    18
             );
         };
     }

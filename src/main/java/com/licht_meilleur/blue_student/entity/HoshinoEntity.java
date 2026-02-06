@@ -93,29 +93,30 @@ public class HoshinoEntity extends AbstractStudentEntity {
         return super.interactMob(player, hand);
     }
 
-    @Override
     protected void initGoals() {
         this.goalSelector.add(0, new StudentRideWithOwnerGoal(this, this));
         this.goalSelector.add(1, new SwimGoal(this));
 
-        // ★GuardGoalは「撃つ」ではなく「ガード射撃アニメのスイッチ」だけにするのが安全
-        this.goalSelector.add(2, new HoshinoGuardGoal(this, this));
+        // ★Aim（向き＋射撃）: LOOK担当
+        this.goalSelector.add(2, new StudentAimGoal(this, this));
 
-        this.goalSelector.add(3, new StudentAimFireGoal(this, this));
+        this.goalSelector.add(3, new HoshinoGuardGoal(this, this));
+        // 詰まり脱出（MOVE）
         this.goalSelector.add(4, new StudentStuckEscapeGoal(this, this));
-        this.goalSelector.add(5, new EscapeDangerGoal(this, 1.25));
 
-        this.goalSelector.add(6,
-                new StudentReturnToOwnerGoal(this, this,
-                        1.35, 28.0, 2.5, 48.0, 20
-                ));
+        // 回避（MOVE） ※Combatより上
+        this.goalSelector.add(5, new StudentEvadeGoal(this, this));
 
-        this.goalSelector.add(7, new net.minecraft.entity.ai.goal.FleeEntityGoal<>(
-                this, HostileEntity.class, 8.0f, 1.0, 1.35
-        ));
+        // 危険回避（バニラ） ※必要ならここ（ただし強すぎるなら外す）
+        this.goalSelector.add(6, new EscapeDangerGoal(this, 1.25));
 
-        this.goalSelector.add(8, new StudentCombatGoal(this, this));
-        this.goalSelector.add(9, new StudentEvadeGoal(this, this));
+        this.goalSelector.add(7, new StudentReturnToOwnerGoal(this, this, 1.35, 28.0, 2.5, 48.0, 20));
+
+        // 角詰まり用（強いので優先度低め推奨）
+        this.goalSelector.add(8, new net.minecraft.entity.ai.goal.FleeEntityGoal<>(this, HostileEntity.class, 8.0f, 1.0, 1.35));
+
+        // 戦闘（MOVE + 射撃キュー）
+        this.goalSelector.add(9, new StudentCombatGoal(this, this));
 
         this.goalSelector.add(10, new StudentFollowGoal(this, this, 1.1));
         this.goalSelector.add(11, new StudentSecurityGoal(this, this,
@@ -123,8 +124,7 @@ public class HoshinoEntity extends AbstractStudentEntity {
                     @Override public BlockPos getSecurityPos() { return HoshinoEntity.this.getSecurityPos(); }
                     @Override public void setSecurityPos(BlockPos pos) { HoshinoEntity.this.setSecurityPos(pos); }
                 },
-                1.0
-        ));
+                1.0));
         this.goalSelector.add(12, new StudentEatGoal(this, this));
     }
 

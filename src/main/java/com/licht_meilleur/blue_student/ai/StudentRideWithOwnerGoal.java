@@ -23,7 +23,7 @@ public class StudentRideWithOwnerGoal extends Goal {
     public StudentRideWithOwnerGoal(PathAwareEntity mob, IStudentEntity student) {
         this.mob = mob;
         this.student = student;
-        this.setControls(EnumSet.of(Control.MOVE, Control.LOOK));
+        this.setControls(EnumSet.of(Control.MOVE));
     }
 
     @Override

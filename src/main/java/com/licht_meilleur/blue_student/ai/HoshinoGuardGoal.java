@@ -16,7 +16,7 @@ public class HoshinoGuardGoal extends Goal {
     public HoshinoGuardGoal(HoshinoEntity mob, IStudentEntity student) {
         this.mob = mob;
         this.student = student;
-        this.setControls(EnumSet.of(Control.LOOK));
+
     }
 
     @Override

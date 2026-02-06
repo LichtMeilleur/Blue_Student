@@ -33,6 +33,26 @@ public interface IStudentEntity {
     boolean hasQueuedFire();
 
 
+    void requestLookTarget(net.minecraft.entity.LivingEntity target, int priority, int holdTicks);
+    void requestLookAwayFrom(net.minecraft.entity.LivingEntity target, int priority, int holdTicks);
+    void requestLookWorldDir(net.minecraft.util.math.Vec3d dir, int priority, int holdTicks);
+    void requestLookMoveDir(int priority, int holdTicks);
+    void requestLookPos(net.minecraft.util.math.Vec3d pos, int priority, int holdTicks);
+
+
+    // AimGoalが読む
+    LookRequest consumeLookRequest();
+    // 毎tick、現在の要求（保持中なら保持）
+
+
+
+    // ===== Evade state =====
+    boolean isEvading();
+    void setEvading(boolean v);
+
+
+
+
     // ===== animation / presentation hooks =====
     default void requestShot() {}
     default void requestShot(LivingEntity target) { requestShot(); } // ★追加
@@ -44,4 +64,8 @@ public interface IStudentEntity {
     default void requestExit() {}
     default void requestSwim() {}
     default void requestSit() {}
+
+
+
 }
+

@@ -7,10 +7,7 @@ import com.licht_meilleur.blue_student.inventory.StudentInventory;
 import com.licht_meilleur.blue_student.inventory.StudentScreenHandler;
 import com.licht_meilleur.blue_student.skill.SkillRegistry;
 import com.licht_meilleur.blue_student.state.StudentWorldState;
-import com.licht_meilleur.blue_student.student.IStudentEntity;
-import com.licht_meilleur.blue_student.student.StudentAiMode;
-import com.licht_meilleur.blue_student.student.StudentId;
-import com.licht_meilleur.blue_student.student.StudentLifeState;
+import com.licht_meilleur.blue_student.student.*;
 import com.licht_meilleur.blue_student.weapon.WeaponSpec;
 import com.licht_meilleur.blue_student.weapon.WeaponSpecs;
 import net.fabricmc.api.EnvType;
@@ -60,6 +57,8 @@ import software.bernie.geckolib.core.animation.AnimationState;
 import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
+import software.bernie.geckolib.cache.object.GeoBone;
+
 
 import java.util.EnumSet;
 import java.util.UUID;
@@ -172,6 +171,20 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     private BlockPos respawnBedFoot;
     private BlockPos respawnSafePos;
 
+
+    // ★ shot の “0フレーム” を潰すための保持（1tickで十分）
+    private int clientShotHoldTicks = 0;
+    private static final int SHOT_HOLD_TICKS = 1;
+
+    // ===== Evade state =====
+    private boolean evading = false;
+
+    // ===== No-fall grace (common) =====
+    protected int noFallTicks = 0;
+    private boolean bs_wasOnGround = true;
+
+
+
     // ===== ゴースト =====
     private boolean ghost = false;
 
@@ -179,6 +192,9 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     // -1 なら非表示
     private int eatingSlot = -1;
     private int eatingServerTicks = 0;
+
+    private final LookRequest lookReq = new LookRequest();
+
 
     // skill state
     private int skillCooldownTicks = 0;
@@ -194,6 +210,8 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             UUID.fromString("6b6c9c2a-43a8-4d4f-9aa2-2e23c77c1c02");
 
     protected boolean guardBuffApplied = false;
+
+
 
     public static DefaultAttributeContainer.Builder createAttributes() {
         return PathAwareEntity.createMobAttributes()
@@ -327,6 +345,13 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                 .add(right.multiply(getSleepSideOffset()));
     }
 
+    // HinaEntity の fly_shot 判定など「クライアントの射撃演出中か」を見る用
+    public int getClientShotTicksForAnim() {
+        if (!this.getWorld().isClient) return 0;
+        return this.clientShotTicks + this.clientShotHoldTicks;
+    }
+
+
     // ===== tick =====
     @Override
     public void tick() {
@@ -337,11 +362,31 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             int shotTrig = this.dataTracker.get(SHOT_TRIGGER);
             if (shotTrig != lastShotTrigger) {
                 lastShotTrigger = shotTrig;
-                clientShotTicks = SHOT_ANIM_TICKS;
+
+                WeaponSpec spec2 = WeaponSpecs.forStudent(getStudentId());
+
+                // 昔の「キャンセル連射感」に戻る
+                clientShotTicks = Math.max(1, spec2.animShotHoldTicks);
+                clientShotHoldTicks = 0; // 0フレーム潰しが不要なら消してもOK
                 shotJustStarted = true;
-            } else if (clientShotTicks > 0) {
-                clientShotTicks--;
+
+
+                // ★0フレーム潰し（任意だが安定）
+                clientShotHoldTicks = 2;
+
+                shotJustStarted = true;
+            } else {
+                if (clientShotTicks > 0) {
+                    clientShotTicks--;
+                    if (clientShotTicks == 0) {
+                        clientShotHoldTicks = 2;
+                    }
+                } else if (clientShotHoldTicks > 0) {
+                    clientShotHoldTicks--;
+                }
             }
+
+
 
             int reloadTrig = this.dataTracker.get(RELOAD_TRIGGER);
             if (reloadTrig != lastReloadTrigger) {
@@ -901,7 +946,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             return PlayState.CONTINUE;
         }
 
-        if (clientShotTicks > 0) {
+        if (clientShotTicks > 0 || clientShotHoldTicks > 0) {
             if (shotJustStarted) {
                 state.getController().forceAnimationReset();
                 shotJustStarted = false;
@@ -909,6 +954,8 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             state.getController().setAnimation(SHOT);
             return PlayState.CONTINUE;
         }
+
+
 
         if (clientReloadTicks > 0) {
             if (reloadJustStarted) {
@@ -939,10 +986,17 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         Vec3d look = this.getRotationVec(1.0f).normalize();
 
         Vec3d up = new Vec3d(0, 1, 0);
-        Vec3d right = look.crossProduct(up).normalize();
+        Vec3d right = look.crossProduct(up).normalize(); // 右方向ベクトル
 
-        return eye.add(look.multiply(0.60)).add(right.multiply(0.18)).add(0, -0.10, 0);
+        Vec3d off = StudentId.fromKey(getStudentId().asString()).getMuzzleOffset();
+        // ※ getStudentId() が StudentId を返すなら fromKey いらない
+
+        return eye
+                .add(look.multiply(off.x))   // 前
+                .add(0, off.y, 0)            // 上下
+                .add(right.multiply(off.z)); // 右
     }
+
 
     @Environment(EnvType.CLIENT)
     private Vec3d clientMuzzleWorldPos = null;
@@ -982,6 +1036,28 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         }
 
         super.tickMovement();
+
+        // ★ここに追加（共通 no-fall 更新）
+        if (!this.getWorld().isClient) {
+            boolean onGroundNow = this.isOnGround();
+
+            // 地上→空中に移った瞬間（崖落ち/ノックバック対策）
+            if (bs_wasOnGround && !onGroundNow) {
+                noFallTicks = Math.max(noFallTicks, 20); // 最低1秒
+            }
+            bs_wasOnGround = onGroundNow;
+
+            // 減算
+            if (noFallTicks > 0) noFallTicks--;
+
+            // ★空中にいる限り、猶予があるなら切れないように維持
+            if (!onGroundNow && noFallTicks > 0) {
+                noFallTicks = Math.max(noFallTicks, 5);
+            }
+
+            // 着地したら“消す”のが好みならここで0にしてOK（安全側なら残しても良い）
+            // if (onGroundNow) noFallTicks = 0;
+        }
 
         if (this.getWorld().isClient) return;
 
@@ -1340,5 +1416,99 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
         return false;
     }
+
+    @Override
+    public boolean isEvading() {
+        return evading;
+    }
+
+    @Override
+    public void setEvading(boolean v) {
+        this.evading = v;
+    }
+
+
+    //@Override
+    public LookRequest getLookRequest() {
+        return lookReq;
+    }
+
+    private boolean canOverrideLook(int prio) {
+        // hold中で、今のprioの方が強いなら上書き拒否
+        return !(lookReq.holdTicks > 0 && prio < lookReq.priority);
+    }
+
+    @Override
+    public void requestLookTarget(LivingEntity t, int prio, int hold) {
+        if (t == null) return;
+        if (!canOverrideLook(prio)) return;
+        lookReq.type = LookIntentType.TARGET;
+        lookReq.target = t;
+        lookReq.dir = null;
+        lookReq.priority = prio;
+        lookReq.holdTicks = hold;
+    }
+
+    @Override
+    public void requestLookAwayFrom(LivingEntity t, int prio, int hold) {
+        if (t == null) return;
+        if (!canOverrideLook(prio)) return;
+        lookReq.type = LookIntentType.AWAY_FROM;
+        lookReq.target = t;
+        lookReq.dir = null;
+        lookReq.priority = prio;
+        lookReq.holdTicks = hold;
+    }
+
+    @Override
+    public void requestLookWorldDir(Vec3d d, int prio, int hold) {
+        if (d == null || d.lengthSquared() < 1e-6) return;
+        if (!canOverrideLook(prio)) return;
+        lookReq.type = LookIntentType.WORLD_DIR;
+        lookReq.target = null;
+        lookReq.dir = d;
+        lookReq.priority = prio;
+        lookReq.holdTicks = hold;
+    }
+
+    @Override
+    public void requestLookMoveDir(int prio, int hold) {
+        if (!canOverrideLook(prio)) return;
+        lookReq.type = LookIntentType.MOVE_DIR;
+        lookReq.target = null;
+        lookReq.dir = null;
+        lookReq.priority = prio;
+        lookReq.holdTicks = hold;
+    }
+
+    @Override
+    public void requestLookPos(Vec3d pos, int priority, int holdTicks) {
+        if (pos == null) return;
+        lookReq.type = LookIntentType.POS;
+        lookReq.pos = pos;
+        lookReq.priority = priority;
+        lookReq.holdTicks = holdTicks;
+    }
+
+
+    @Override
+    public LookRequest consumeLookRequest() {
+        LookRequest copy = new LookRequest();
+        copy.type = lookReq.type;
+        copy.target = lookReq.target;
+        copy.dir = lookReq.dir;
+        copy.priority = lookReq.priority;
+        copy.holdTicks = lookReq.holdTicks;
+
+        lookReq.clear();
+        return copy;
+    }
+    @Override
+    public boolean handleFallDamage(float fallDistance, float damageMultiplier, DamageSource source) {
+        if (noFallTicks > 0) return false;
+        return super.handleFallDamage(fallDistance, damageMultiplier, source);
+    }
+
+
 
 }

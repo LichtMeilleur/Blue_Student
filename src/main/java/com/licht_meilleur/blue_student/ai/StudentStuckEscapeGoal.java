@@ -66,7 +66,7 @@ public class StudentStuckEscapeGoal extends Goal {
     public StudentStuckEscapeGoal(PathAwareEntity mob, IStudentEntity student) {
         this.mob = mob;
         this.student = student;
-        this.setControls(EnumSet.of(Control.MOVE, Control.LOOK));
+        this.setControls(EnumSet.of(Control.MOVE));
     }
 
     @Override
@@ -157,7 +157,6 @@ public class StudentStuckEscapeGoal extends Goal {
         }
 
         Vec3d dir = (fixedDir != null) ? fixedDir : new Vec3d(0, 0, -1);
-        lookAtDirection(dir);
 
         int elapsed = ESCAPE_DURATION - escapeTicks;
 
@@ -198,7 +197,6 @@ public class StudentStuckEscapeGoal extends Goal {
 
         // ★pathがnullでも startMovingTo を一度は試す（屋内角でnullが出やすい）
         mob.getNavigation().startMovingTo(anchor.x, anchor.y, anchor.z, ANCHOR_SPEED);
-        lookMoveDirection();
     }
 
     // =========================================================
@@ -337,32 +335,6 @@ public class StudentStuckEscapeGoal extends Goal {
             return new Vec3d(clamped.x, desired.y, clamped.z);
         }
         return desired;
-    }
-
-    // =========================================================
-    // Look helpers
-    // =========================================================
-
-    private void lookMoveDirection() {
-        Vec3d v = mob.getVelocity();
-        Vec3d hv = new Vec3d(v.x, 0, v.z);
-        if (hv.lengthSquared() < 1.0e-6) return;
-
-        Vec3d p = mob.getPos().add(hv.normalize().multiply(2.0));
-        mob.getLookControl().lookAt(p.x, mob.getEyeY(), p.z, 80.0f, 80.0f);
-    }
-
-    private void lookAtDirection(Vec3d dir) {
-        Vec3d d = new Vec3d(dir.x, 0, dir.z);
-        if (d.lengthSquared() < 1.0e-6) return;
-        d = d.normalize();
-
-        mob.getLookControl().lookAt(
-                mob.getX() + d.x * 2.0,
-                mob.getEyeY(),
-                mob.getZ() + d.z * 2.0,
-                90.0f, 90.0f
-        );
     }
 
     // =========================================================

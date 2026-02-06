@@ -33,7 +33,7 @@ public class StudentSecurityGoal extends Goal {
         this.student = student;
         this.security = security;
         this.speed = speed;
-        this.setControls(EnumSet.of(Control.MOVE, Control.LOOK));
+        this.setControls(EnumSet.of(Control.MOVE));
     }
 
     @Override
