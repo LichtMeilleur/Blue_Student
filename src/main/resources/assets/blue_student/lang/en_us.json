@@ -13,7 +13,7 @@
     "skill.blue_student.hina.only": "Aerial Support",
     "weapon.blue_student.hina": "Light Machine Gun",
   "student.blue_student.kisaki": "Kisaki",
-    "skill.blue_student.kisaki.only": "Player Buff",
+    "skill.blue_student.kisaki.only": "Student Buff",
     "weapon.blue_student.kisaki": "Sub Machine Gun",
   "student.blue_student.alice": "Alice",
     "skill.blue_student.alice.only": "Hyper Shot",
@@ -27,7 +27,9 @@
   "ability.blue_student.hoshino": "Guards the player by moving in front of them.",
   "ability.blue_student.hina": "Can fly and fire from above. High rate of fire.",
   "ability.blue_student.kisaki": "Buffs the player.",
-  "ability.blue_student.alice": "Fires a high-power hyper shot."
+  "ability.blue_student.alice": "Fires a high-power hyper shot.",
+
+  "msg.blue_student.not_in_same_dimension":"Does not exist in the same dimension"
 
 
 }

@@ -77,6 +77,12 @@ public class TabletStudentScreen extends Screen {
             sendCall();
             this.close();
         }).dimensions(x0 + 10, y0 + 228, 45, 18).build());
+
+        // ★ CallBack（呼び戻し）…Callの右隣
+        addDrawableChild(ButtonWidget.builder(Text.literal("CallBack"), b -> {
+            sendCallBack();
+            this.close();
+        }).dimensions(x0 + 10 + 50, y0 + 228, 70, 18).build());
     }
 
     @Override
@@ -142,5 +148,11 @@ public class TabletStudentScreen extends Screen {
         ctx.getMatrices().scale(scale, scale, 1.0f);
         ctx.drawText(this.textRenderer, text, 0, 0, color, false);
         ctx.getMatrices().pop();
+    }
+    private void sendCallBack() {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeString(sid.asString());
+        buf.writeBlockPos(tabletPos);
+        ClientPlayNetworking.send(ModPackets.CALL_BACK_STUDENT, buf);
     }
 }

@@ -68,6 +68,9 @@ public class ClientPackets {
                     case RAILGUN -> {
                         spawnRailShot(w, start2, dirs[0], fxWidth, travelDist);
                     }
+                    case RAILGUN_HYPER -> {
+                        spawnHyperRailShot(w, start2, dirs[0], fxWidth * 1.4f, travelDist);
+                    }
 
 
                 }
@@ -103,7 +106,7 @@ public class ClientPackets {
         // ===== 設定 =====
         int count = 6;          // 3発
         double gap = 0.2;      // ← 玉の間隔（好みで 0.3〜0.6）
-        double speed = 2.0;     // 飛ぶ速さ
+        double speed = 4.0;     // 飛ぶ速さ
         double size = 0.55 * Math.max(0.6, fxWidth);
 
         for (int i = 0; i < count; i++) {
@@ -141,6 +144,90 @@ public class ClientPackets {
                 0.7f,
                 false
         );
+    }
+    private static void spawnHyperRailShot(ClientWorld w, Vec3d start, Vec3d dir, float fxWidth, float travelDist) {
+        Vec3d d = dir.normalize();
+
+        // ★3つ並べる（先頭・中・後ろ）
+        int blobs = 5;
+        double blobGap = 0.45; // ← 塊同士の間隔（0.18〜0.45で調整）
+
+        for (int i = 0; i < blobs; i++) {
+            Vec3d s = start.add(d.multiply(blobGap * i));
+            spawnHyperRailShotBlob(w, s, d, fxWidth, travelDist);
+        }
+        // =========================
+        // ① マズル煙（供養モクモク）
+        // =========================
+        for (int i = 0; i < 18; i++) {
+            double ox = (w.random.nextDouble() - 0.5) * 0.2;
+            double oz = (w.random.nextDouble() - 0.5) * 0.2;
+
+            w.addParticle(
+                    ParticleTypes.LARGE_SMOKE,
+                    true,
+                    start.x + ox,
+                    start.y + 0.05,
+                    start.z + oz,
+                    0,
+                    0.08,
+                    0
+            );
+        }
+    }
+
+    private static void spawnHyperRailShotBlob(ClientWorld w, Vec3d start, Vec3d d, float fxWidth, float travelDist) {
+        double speed = 2.8;
+        double size = 0.8 + fxWidth * 0.8;
+
+        Vec3d vel = d.multiply(speed);
+
+        // =========================
+        // ① マズル煙（供養モクモク）
+        // ※ 3連だと煙が3倍出てうるさいので、ここは“弾”から外すのがコツ
+        // =========================
+        // ここは呼び出し側（発射1回）で別に出すのがおすすめ
+        //（このBlob関数からは削除推奨）
+
+        // =========================
+        // ② コア（塊）
+        // =========================
+        for (int i = 0; i < 5; i++) {
+            w.addParticle(ParticleTypes.END_ROD, true,
+                    start.x, start.y, start.z,
+                    vel.x, vel.y, vel.z
+            );
+        }
+
+        // =========================
+        // ③ 青い外殻
+        // =========================
+        // ③ 青いエネルギー外殻（中心集中・球状）
+        int shellCount = 80; // ←増やすほど太く見える
+        double radius = 0.05 + 0.18 * fxWidth; // ←中心寄せはここ（小さいほど締まる）
+
+        for (int i = 0; i < shellCount; i++) {
+            // ランダム方向（球）
+            double x = w.random.nextDouble() * 2 - 1;
+            double y = w.random.nextDouble() * 2 - 1;
+            double z = w.random.nextDouble() * 2 - 1;
+            Vec3d off = new Vec3d(x, y, z);
+            if (off.lengthSquared() < 1e-6) continue;
+            off = off.normalize().multiply(radius * (0.3 + w.random.nextDouble() * 0.7)); // 内側寄せ
+
+            w.addParticle(
+                    ParticleTypes.SOUL_FIRE_FLAME,
+                    true,
+                    start.x + off.x,
+                    start.y + off.y,
+                    start.z + off.z,
+                    vel.x, vel.y, vel.z
+            );
+        }
+
+
+        // ※着弾爆ぜ（④）は “弾3つ分” 出すと派手すぎるので
+        // spawnHyperRailShot() の外で1回だけ出すのが基本です。
     }
 
 

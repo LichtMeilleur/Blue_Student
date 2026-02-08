@@ -60,7 +60,14 @@ public class StudentCombatGoal extends Goal {
         if (mode != StudentAiMode.FOLLOW && mode != StudentAiMode.SECURITY) return false;
 
         target = findTarget();
+
+
+        if (target != null) {
+            mob.setTarget(target); // ★追加：他のシステム(ドローン等)が owner.getTarget() で取れるようにする
+        }
         return target != null;
+
+
     }
 
     @Override
@@ -86,6 +93,7 @@ public class StudentCombatGoal extends Goal {
     @Override
     public void stop() {
         target = null;
+        mob.setTarget(null);
         mob.getNavigation().stop();
     }
 
@@ -100,6 +108,7 @@ public class StudentCombatGoal extends Goal {
 
         if (target == null || !target.isAlive()) {
             target = findTarget();
+            mob.setTarget(target);
             mob.getNavigation().stop();
             return;
         }

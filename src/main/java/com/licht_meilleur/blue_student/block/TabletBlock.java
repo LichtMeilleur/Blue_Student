@@ -90,13 +90,26 @@ public class TabletBlock extends BlockWithEntity {
     @Override
     public void onBreak(World world, BlockPos pos, BlockState state, PlayerEntity player) {
         DoubleBlockHalf half = state.get(HALF);
-        BlockPos otherPos = (half == DoubleBlockHalf.LOWER) ? pos.up() : pos.down();
-        BlockState other = world.getBlockState(otherPos);
-        if (other.isOf(this) && other.get(HALF) != half) {
-            world.breakBlock(otherPos, false, player);
+        BlockPos basePos = (half == DoubleBlockHalf.LOWER) ? pos : pos.down();
+
+        if (!world.isClient) {
+            // ★ドロップはLOWER（=base）だけ
+            if (basePos.equals(pos)) {
+                dropStack(world, basePos, new net.minecraft.item.ItemStack(BlueStudentMod.TABLET_BLOCK_ITEM ));
+                // ↑ TABLET_ITEM はあなたの登録名に合わせて
+            }
+
+            // 相方をdrop無しで破壊
+            BlockPos otherPos = (half == DoubleBlockHalf.LOWER) ? pos.up() : pos.down();
+            BlockState other = world.getBlockState(otherPos);
+            if (other.isOf(this) && other.get(HALF) != half) {
+                world.breakBlock(otherPos, false, player);
+            }
         }
+
         super.onBreak(world, pos, state, player);
     }
+
 
     @Override
     public BlockState getStateForNeighborUpdate(BlockState state, net.minecraft.util.math.Direction dir,

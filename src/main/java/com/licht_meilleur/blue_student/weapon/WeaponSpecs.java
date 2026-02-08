@@ -117,5 +117,38 @@ public class WeaponSpecs {
                     18
             );
         };
+
+
+
     }
+
+
+    public static final WeaponSpec ALICE_HYPER = WeaponSpec.hitscan(
+            48,     // range
+            80,     // cooldownTicks
+            14f,    // damage
+            0f,     // projectileSpeed (未使用)
+            0f,     // spread
+            1,      // pellets
+            0f,     // knockback
+            true,   // bypassIFrames
+            0, 48,  // preferredMin/Max
+            1,      // mag
+            1,      // reload
+            0,
+            0,
+            true,   // infiniteAmmo
+            WeaponSpec.FxType.RAILGUN_HYPER,
+            1.0f,   // ★太さ（1ブロック）
+            20      // animation ticks
+    );
+
+
+
+
+
+
 }
+
+
+

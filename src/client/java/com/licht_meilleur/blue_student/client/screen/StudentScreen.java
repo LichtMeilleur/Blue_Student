@@ -1,4 +1,4 @@
-package com.licht_meilleur.blue_student.client;
+package com.licht_meilleur.blue_student.client.screen;
 
 import com.licht_meilleur.blue_student.BlueStudentMod;
 import com.licht_meilleur.blue_student.inventory.StudentScreenHandler;

@@ -34,6 +34,7 @@ public class WeaponSpec {
     public enum FxType {
         BULLET,     // 普通の弾
         SHOTGUN,    // 散弾
+        RAILGUN_HYPER,
         RAILGUN     // 太ビーム
     }
     public final FxType fxType;

@@ -1,16 +1,15 @@
 package com.licht_meilleur.blue_student;
 
-import com.licht_meilleur.blue_student.client.OnlyBedRenderer;
+import com.licht_meilleur.blue_student.client.*;
+import com.licht_meilleur.blue_student.client.screen.StudentScreen;
 import com.licht_meilleur.blue_student.client.student_renderer.KisakiRenderer;
 import com.licht_meilleur.blue_student.client.student_renderer.ShirokoRenderer;
 import com.licht_meilleur.blue_student.client.student_renderer.HoshinoRenderer;
 import com.licht_meilleur.blue_student.client.student_renderer.HinaRenderer;
 import com.licht_meilleur.blue_student.client.student_renderer.AliceRenderer;
 
-import com.licht_meilleur.blue_student.client.TabletBlockRenderer;
 import com.licht_meilleur.blue_student.client.projectile.BulletRenderer;
 import com.licht_meilleur.blue_student.client.screen.TabletScreen;
-import com.licht_meilleur.blue_student.client.StudentScreen;
 import com.licht_meilleur.blue_student.client.network.ClientPackets;
 import com.licht_meilleur.blue_student.registry.ModScreenHandlers;
 import net.fabricmc.api.ClientModInitializer;
@@ -34,6 +33,9 @@ public class BlueStudentClient implements ClientModInitializer {
         EntityRendererRegistry.register(BlueStudentMod.KISAKI, KisakiRenderer::new);
         EntityRendererRegistry.register(BlueStudentMod.ALICE, AliceRenderer::new);
 
+
+        EntityRendererRegistry.register(BlueStudentMod.KISAKI_DRAGON, KisakiDragonRenderer::new);
+        EntityRendererRegistry.register(BlueStudentMod.SHIROKO_DRONE, ShirokoDroneRenderer::new);
 
         BlockEntityRendererRegistry.register(BlueStudentMod.TABLET_BE, ctx -> new TabletBlockRenderer());
         BlockEntityRendererFactories.register(BlueStudentMod.ONLY_BED_BE, ctx -> new OnlyBedRenderer());

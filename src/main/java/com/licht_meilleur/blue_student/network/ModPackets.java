@@ -27,95 +27,65 @@ public class ModPackets {
     }
     public static final Identifier SET_AI_MODE  = BlueStudentMod.id("set_ai_mode");
     public static final Identifier CALL_STUDENT = BlueStudentMod.id("call_student");
+    public static final Identifier CALL_BACK_STUDENT = BlueStudentMod.id("call_back_student");
+
     public static final Identifier S2C_SHOT_FX = BlueStudentMod.id("s2c_shot_fx");
     // ★ 64にしたければ 64 にする
     private static final int COST_DIAMOND = 64;
 
     public static void registerC2S() {
-        System.out.println("[BlueStudent] registerC2S called");
-        BlueStudentMod.LOGGER.info("[BlueStudent] registerC2S called");
 
-        // --- 既存：AI切り替え ---
+        // =========================================
+        // AI MODE
+        // =========================================
         ServerPlayNetworking.registerGlobalReceiver(SET_AI_MODE, (server, player, handler, buf, responseSender) -> {
-            // ★bufはここで読み切る（execute内で読まない！）
+
             final int entityId = buf.readInt();
             final int modeId = buf.readInt();
 
             server.execute(() -> {
-                var world = player.getWorld();
-                var raw = world.getEntityById(entityId);
-
+                var raw = player.getWorld().getEntityById(entityId);
                 if (!(raw instanceof IStudentEntity se)) return;
-
-                if (se.getOwnerUuid() == null) se.setOwnerUuid(player.getUuid());
-                if (!player.getUuid().equals(se.getOwnerUuid())) return;
 
                 se.setAiMode(StudentAiMode.fromId(modeId));
             });
         });
 
 
-        // --- 追加：CALL ---
+
+        // =========================================
+        // CALL (召喚)
+        // =========================================
         ServerPlayNetworking.registerGlobalReceiver(CALL_STUDENT, (server, player, handler, buf, responseSender) -> {
 
-            // ★ bufはここで読み切る（execute内で読まない）
             final String sidStr = buf.readString(64);
             final BlockPos tabletPos = buf.readBlockPos();
 
             server.execute(() -> {
+
                 ServerWorld sw = player.getServerWorld();
                 StudentWorldState state = StudentWorldState.get(sw);
 
+                StudentId sid = parseStudentId(sidStr);
 
-                // ===== sid parse =====
-                final StudentId sid;
-                try {
-                    sid = parseStudentId(sidStr);
-                } catch (Exception ex) {
-                    player.sendMessage(Text.literal("Unknown student: " + sidStr), false);
-                    return;
-                }
-
-
-                // ===== 重複チェック（各生徒IDで世界唯一）=====
                 if (state.hasStudent(sid)) {
-                    player.sendMessage(Text.literal("Already summoned: " + sid.asString()), false);
+                    player.sendMessage(Text.literal("Already summoned"), false);
                     return;
                 }
 
-                // ===== コスト =====
-                if (!player.getAbilities().creativeMode) {
-                    if (!consumeItem(player, Items.DIAMOND, COST_DIAMOND)) {
-                        player.sendMessage(Text.literal("Need diamond x" + COST_DIAMOND), false);
-                        return;
-                    }
-                }
-
-
-
-                // ===== spawn entity (sidで切替) =====
                 Entity raw = switch (sid) {
                     case SHIROKO -> BlueStudentMod.SHIROKO.create(sw);
-
-                    // ↓ 他生徒を作ったらここを差し替える
-                     case HOSHINO -> BlueStudentMod.HOSHINO.create(sw);
-                     case HINA    -> BlueStudentMod.HINA.create(sw);
-                     case ALICE   -> BlueStudentMod.ALICE.create(sw);
-                     case KISAKI  -> BlueStudentMod.KISAKI.create(sw);
-
-                    default -> BlueStudentMod.SHIROKO.create(sw); // 保険（enum増えた時）
+                    case HOSHINO -> BlueStudentMod.HOSHINO.create(sw);
+                    case HINA    -> BlueStudentMod.HINA.create(sw);
+                    case ALICE   -> BlueStudentMod.ALICE.create(sw);
+                    case KISAKI  -> BlueStudentMod.KISAKI.create(sw);
                 };
 
-                if (!(raw instanceof IStudentEntity se)) {
-                    player.sendMessage(Text.literal("Spawn failed for " + sid.asString()), false);
-                    return;
-                }
+                if (!(raw instanceof IStudentEntity se)) return;
 
-                Entity e = (Entity) raw;
+                BlockPos spawn = tabletPos.up();
 
-                // ===== spawn position =====
-                BlockPos spawn = tabletPos.up(); // タブレットの1個上
-                e.refreshPositionAndAngles(
+                raw.refreshPositionAndAngles(
                         spawn.getX() + 0.5,
                         spawn.getY(),
                         spawn.getZ() + 0.5,
@@ -123,73 +93,97 @@ public class ModPackets {
                         0
                 );
 
-                // owner
                 se.setOwnerUuid(player.getUuid());
 
-                // spawn
-                sw.spawnEntity(e);
+                sw.spawnEntity(raw);
 
-                // 世界唯一としてUUID保存
-                state.setStudent(sid, e.getUuid());
+                // ★位置＋DIM保存（重要）
+                state.setStudent(sid, raw.getUuid(), sw, spawn);
+
+                player.sendMessage(Text.literal("Summoned"), false);
+            });
+        });
 
 
-                player.sendMessage(Text.literal("Summoned: " + sid.asString()), false);
+
+        // =========================================
+        // CALL BACK（完全版）
+        // =========================================
+        ServerPlayNetworking.registerGlobalReceiver(CALL_BACK_STUDENT, (server, player, handler, buf, responseSender) -> {
+
+            final String sidStr = buf.readString(64);
+            final BlockPos tabletPos = buf.readBlockPos();
+
+            server.execute(() -> {
+
+                ServerWorld sw = player.getServerWorld();
+                StudentWorldState state = StudentWorldState.get(sw);
+
+                StudentId sid = parseStudentId(sidStr);
+
+                UUID uuid = state.getStudentUuid(sid);
+                if (uuid == null) return;
+
+                BlockPos spawn = tabletPos.up();
+
+                // ======================
+                // 同ディメンション
+                // ======================
+                Entity found = sw.getEntity(uuid);
+
+                if (found != null && found.isAlive()) {
+                    found.refreshPositionAndAngles(
+                            spawn.getX() + 0.5,
+                            spawn.getY(),
+                            spawn.getZ() + 0.5,
+                            player.getYaw(),
+                            0
+                    );
+                    return;
+                }
+
+
+                // ======================
+                // 別ディメンション
+                // ======================
+                StudentWorldState.StudentData data = state.getData(sid);
+                if (data == null) return;
+
+                var key = net.minecraft.registry.RegistryKey.of(
+                        net.minecraft.registry.RegistryKeys.WORLD,
+                        new Identifier(data.dimension)
+                );
+
+                ServerWorld oldWorld = player.getServer().getWorld(key);
+                if (oldWorld == null) return;
+
+                Entity other = oldWorld.getEntity(uuid);
+                if (other == null || !other.isAlive()) return;
+
+                Entity moved = other.moveToWorld(sw);
+
+                if (moved != null) {
+                    moved.refreshPositionAndAngles(
+                            spawn.getX() + 0.5,
+                            spawn.getY(),
+                            spawn.getZ() + 0.5,
+                            player.getYaw(),
+                            0
+                    );
+                }
             });
         });
     }
-
-
-        private static int countItem(ServerPlayerEntity player, Item item) {
-        int total = 0;
-        var inv = player.getInventory();
-        for (int i = 0; i < inv.size(); i++) {
-            ItemStack st = inv.getStack(i);
-            if (st.isOf(item)) total += st.getCount();
-        }
-        return total;
-    }
     // =========================
-    // helpers
-    // =========================
-
+// StudentId 文字列 → enum 変換
+// =========================
     private static StudentId parseStudentId(String s) {
         for (StudentId id : StudentId.values()) {
-            if (id.asString().equalsIgnoreCase(s)) return id;     // "shiroko"
-            if (id.name().equalsIgnoreCase(s)) return id;         // "SHIROKO"
+            if (id.asString().equalsIgnoreCase(s)) return id;
+            if (id.name().equalsIgnoreCase(s)) return id;
         }
         throw new IllegalArgumentException("Unknown StudentId: " + s);
     }
 
 
-
-    /**
-     * インベントリから item を count 個消費する（足りないなら false）
-     */
-    private static boolean consumeItem(ServerPlayerEntity player, Item item, int count) {
-        if (count <= 0) return true;
-
-        int total = 0;
-        var inv = player.getInventory();
-        for (int i = 0; i < inv.size(); i++) {
-            ItemStack st = inv.getStack(i);
-            if (st.isOf(item)) total += st.getCount();
-        }
-        if (total < count) return false;
-
-        int remaining = count;
-        for (int i = 0; i < inv.size() && remaining > 0; i++) {
-            ItemStack st = inv.getStack(i);
-            if (!st.isOf(item)) continue;
-
-            int dec = Math.min(st.getCount(), remaining);
-            st.decrement(dec);
-            remaining -= dec;
-        }
-
-        // ★ サーバー側で確実に反映させる
-        inv.markDirty();
-        player.playerScreenHandler.sendContentUpdates();
-
-        return true;
-    }
 }

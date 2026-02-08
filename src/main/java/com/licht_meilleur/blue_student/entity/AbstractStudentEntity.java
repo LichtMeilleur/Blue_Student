@@ -211,6 +211,22 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
     protected boolean guardBuffApplied = false;
 
+    // ===== キサキ =====
+    protected static final UUID KISAKI_ARMOR_UUID =
+            UUID.fromString("2ddc9b7c-7c72-4e86-b8e5-3f7a2df5d6b1");
+    protected static final UUID KISAKI_MAXHP_UUID =
+            UUID.fromString("9c3f0c47-3f2b-4dd1-9f1b-7e6b7b7fd11a");
+
+    protected boolean kisakiBuffApplied = false;
+    protected int kisakiSupportTicks = 0;
+
+
+    private int dimFollowCooldown = 0;
+
+    private int dimTransferCooldown = 0;
+    private boolean dimTransferQueued = false;
+
+
 
 
     public static DefaultAttributeContainer.Builder createAttributes() {
@@ -276,6 +292,11 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     public void requestShot() {
         if (this.getWorld().isClient) return;
         this.dataTracker.set(SHOT_TRIGGER, this.dataTracker.get(SHOT_TRIGGER) + 1);
+
+        // ★ドローン同期用：サーバーで shotTrigger を進める
+        if (!this.getWorld().isClient) {
+            bumpShotTrigger();
+        }
     }
 
     @Override
@@ -357,8 +378,23 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     public void tick() {
         super.tick();
 
+
+
+
+
         // ===== client：トリガーで演出タイマーを回す =====
         if (this.getWorld().isClient) {
+
+            if (kisakiSupportTicks > 0) {
+                kisakiSupportTicks--;
+                if (kisakiSupportTicks == 0) {
+                    applyKisakiSupportBuff(false, 0, 0, 0);
+                }
+            }
+
+
+
+
             int shotTrig = this.dataTracker.get(SHOT_TRIGGER);
             if (shotTrig != lastShotTrigger) {
                 lastShotTrigger = shotTrig;
@@ -453,6 +489,25 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         // ★スキル共通Tick（まだ使ってないなら後でOK）
         tickSkillCommon();
 
+
+
+        // server tick のどこか（lifeLock解除後・ownerOnline判定の後あたりが安全）
+        if (dimTransferCooldown > 0) dimTransferCooldown--;
+
+        PlayerEntity owner = getOwnerPlayer();
+        if (owner instanceof ServerPlayerEntity sp) {
+            if (getAiMode() == StudentAiMode.FOLLOW && !isLifeLockedForGoal()) {
+                ServerWorld dest = sp.getServerWorld();
+                if (dest != this.getWorld()) {
+                    queueTeleportToOwnerDimension(sp, dest);
+                }
+            }
+        }
+
+
+
+
+
         // ===== server：オーナー不在ならSECURITYにする =====
         if (ownerUuid != null) {
             boolean ownerOnline = (getOwnerPlayer() != null);
@@ -472,8 +527,16 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                         this.setAiMode(StudentAiMode.FOLLOW);
                     }
                 }
+
             }
         }
+        // ★ 現在位置を常に保存（5tickに1回で十分軽い）
+        if (this.age % 5 == 0 && this.getWorld() instanceof ServerWorld sw) {
+            StudentWorldState.get(sw)
+                    .updatePos(getStudentId(), sw, this.getBlockPos());
+        }
+
+
     }
 
     private void applyStatsFromStudentId() {
@@ -485,7 +548,15 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         EntityAttributeInstance ar = getAttributeInstance(EntityAttributes.GENERIC_ARMOR);
         if (ar != null) ar.setBaseValue(id.getBaseDefense());
 
-        this.setHealth(this.getMaxHealth());
+        // ★ここが原因：復活中は満タンにしない
+        if (!isLifeLocked()) {
+            this.setHealth(this.getMaxHealth());
+        } else {
+            // 復活中は「上限超えだけ丸める」
+            if (this.getHealth() > this.getMaxHealth()) {
+                this.setHealth(this.getMaxHealth());
+            }
+        }
     }
 
     /**
@@ -1168,11 +1239,19 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
         this.dataTracker.startTracking(SHOT_TRIGGER, 0);
         this.dataTracker.startTracking(RELOAD_TRIGGER, 0);
+
+
     }
 
     // ===== remove =====
     @Override
     public void remove(RemovalReason reason) {
+        // ★ディメンション移動中は state を消さない
+        if (reason == RemovalReason.CHANGED_DIMENSION) {
+            super.remove(reason);
+            return;
+        }
+
         super.remove(reason);
         if (this.getWorld().isClient) return;
 
@@ -1184,6 +1263,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             }
         }
     }
+
 
     // exit演出用（あなたの既存実装に合わせて）
     public void requestExit() {
@@ -1227,7 +1307,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         super.applyDamage(source, amount);
     }
 
-    // ====== ベッド復活（あなたの既存をそのまま）=====
+    // ====== ベッド復活：Overworld固定版（インベントリ保持）=====
     private void startBedRespawn(ServerWorld sw) {
         BlockPos bed = null;
         if (ownerUuid != null) {
@@ -1272,6 +1352,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         setLifeState(StudentLifeState.EXITING);
         this.lifeTimer = 60;
     }
+
 
     protected @Nullable BlockPos findNearestBedFoot(ServerWorld sw, StudentId sid, BlockPos origin, int r) {
         BlockPos best = null;
@@ -1508,6 +1589,130 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         if (noFallTicks > 0) return false;
         return super.handleFallDamage(fallDistance, damageMultiplier, source);
     }
+
+    public void setKisakiSupportTicks(int ticks) {
+        kisakiSupportTicks = Math.max(kisakiSupportTicks, ticks);
+    }
+    public void applyKisakiSupportBuff(boolean on, double addArmor, double addMaxHp, float healOnApply) {
+        var armor = this.getAttributeInstance(EntityAttributes.GENERIC_ARMOR);
+        var maxHp = this.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
+
+        if (on) {
+            if (kisakiBuffApplied) return;
+            kisakiBuffApplied = true;
+
+            if (armor != null && addArmor != 0) {
+                armor.removeModifier(KISAKI_ARMOR_UUID);
+                armor.addPersistentModifier(new EntityAttributeModifier(
+                        KISAKI_ARMOR_UUID, "kisaki_support_armor", addArmor,
+                        EntityAttributeModifier.Operation.ADDITION
+                ));
+            }
+
+            if (maxHp != null && addMaxHp != 0) {
+                maxHp.removeModifier(KISAKI_MAXHP_UUID);
+                maxHp.addPersistentModifier(new EntityAttributeModifier(
+                        KISAKI_MAXHP_UUID, "kisaki_support_maxhp", addMaxHp,
+                        EntityAttributeModifier.Operation.ADDITION
+                ));
+            }
+
+            float newMax = this.getMaxHealth();
+            if (healOnApply > 0 && this.getHealth() < newMax) {
+                this.setHealth(Math.min(newMax, this.getHealth() + healOnApply));
+            }
+
+        } else {
+            if (!kisakiBuffApplied) return;
+            kisakiBuffApplied = false;
+
+            if (armor != null) armor.removeModifier(KISAKI_ARMOR_UUID);
+            if (maxHp != null) maxHp.removeModifier(KISAKI_MAXHP_UUID);
+
+            if (this.getHealth() > this.getMaxHealth()) {
+                this.setHealth(this.getMaxHealth());
+            }
+        }
+    }
+    public boolean hasKisakiSupportBuff() {
+        return kisakiBuffApplied;
+    }
+
+    public int getShotTrigger() {
+        return this.dataTracker.get(SHOT_TRIGGER);
+    }
+    // サーバーで撃った瞬間に呼ぶ（=トリガーを進める）
+    public void bumpShotTrigger() {
+        if (this.getWorld().isClient) return;
+        this.dataTracker.set(SHOT_TRIGGER, this.dataTracker.get(SHOT_TRIGGER) + 1);
+    }
+
+
+    private void teleportToOwnerDimension(ServerPlayerEntity owner, ServerWorld dest) {
+        if (dimFollowCooldown > 0) { dimFollowCooldown--; return; }
+        dimFollowCooldown = 40;
+
+        this.stopRiding();
+        this.removeAllPassengers();
+
+        Entity movedRaw = this.moveToWorld(dest);
+        if (!(movedRaw instanceof AbstractStudentEntity moved)) return;
+
+        BlockPos safe = owner.getBlockPos().up();
+
+        moved.refreshPositionAndAngles(
+                safe.getX() + 0.5,
+                safe.getY(),
+                safe.getZ() + 0.5,
+                owner.getYaw(),
+                0
+        );
+
+        moved.setVelocity(0,0,0);
+        moved.getNavigation().stop();
+    }
+
+    private void queueTeleportToOwnerDimension(ServerPlayerEntity owner, ServerWorld dest) {
+        if (this.getWorld().isClient) return;
+        if (dimTransferQueued) return;
+        if (dimTransferCooldown > 0) return;
+
+        dimTransferQueued = true;
+        dimTransferCooldown = 20; // 1秒に1回まで（好みで調整）
+
+        // ★次tickで実行（tick中にmoveToWorldしない）
+        dest.getServer().execute(() -> {
+            dimTransferQueued = false;
+
+            if (!(this.getWorld() instanceof ServerWorld src)) return;
+            if (this.isRemoved() || !this.isAlive()) return;
+
+            // オーナーがもう別の次元に移動してたら更新
+            ServerWorld actualDest = owner.getServerWorld();
+            if (actualDest == src) return;
+
+            // ★乗り物/乗客の関係を全部切る（unknown entity passenger 対策）
+            this.stopRiding();
+            this.removeAllPassengers();
+
+            // 安全な座標（とりあえずオーナー周辺）
+            BlockPos base = owner.getBlockPos();
+            BlockPos safe = base.up(); // まず簡易。後で安全判定に置き換え推奨
+
+            Entity movedRaw = this.moveToWorld(actualDest);
+            if (!(movedRaw instanceof AbstractStudentEntity moved)) return;
+
+            moved.refreshPositionAndAngles(
+                    safe.getX() + 0.5, safe.getY(), safe.getZ() + 0.5,
+                    owner.getYaw(), 0
+            );
+            moved.setVelocity(0, 0, 0);
+            moved.getNavigation().stop();
+            moved.velocityDirty = true;
+        });
+    }
+
+
 
 
 

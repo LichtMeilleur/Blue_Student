@@ -20,6 +20,16 @@ public class HitscanWeaponAction implements WeaponAction {
         if (!(shooter instanceof Entity shooterEntity)) return false;
         if (!(shooterEntity.getWorld() instanceof ServerWorld sw)) return false;
 
+
+
+        // ★ここを追加：キサキ支援倍率などを反映した最終ダメージ
+        float damage = spec.damage;
+        if (shooterEntity instanceof AbstractStudentEntity se && se.hasKisakiSupportBuff()) {
+            damage *= 1.25f; // 好きな倍率に
+        }
+
+
+
         // 発射位置（サーバーは近似）
         final Vec3d start = (shooterEntity instanceof AbstractStudentEntity se)
                 ? se.getMuzzlePosApprox()
@@ -55,7 +65,7 @@ public class HitscanWeaponAction implements WeaponAction {
         Entity hit = raycastLiving(sw, shooterEntity, start, end);
         if (hit instanceof LivingEntity le && le.isAlive()) {
             DamageSource ds = sw.getDamageSources().mobAttack((LivingEntity) shooterEntity);
-            le.damage(ds, spec.damage);
+            le.damage(ds, damage);
 
             // ノックバック
             if (spec.knockback > 0.001f) {

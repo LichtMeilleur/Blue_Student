@@ -5,12 +5,7 @@ import com.licht_meilleur.blue_student.block.OnlyBedBlock;
 import com.licht_meilleur.blue_student.block.TabletBlock;
 import com.licht_meilleur.blue_student.block.entity.OnlyBedBlockEntity;
 import com.licht_meilleur.blue_student.block.entity.TabletBlockEntity;
-import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
-import com.licht_meilleur.blue_student.entity.HoshinoEntity;
-import com.licht_meilleur.blue_student.entity.ShirokoEntity;
-import com.licht_meilleur.blue_student.entity.HinaEntity;
-import com.licht_meilleur.blue_student.entity.KisakiEntity;
-import com.licht_meilleur.blue_student.entity.AliceEntity;
+import com.licht_meilleur.blue_student.entity.*;
 
 import com.licht_meilleur.blue_student.entity.projectile.StudentBulletEntity;
 import com.licht_meilleur.blue_student.item.OnlyBedItem;
@@ -79,6 +74,30 @@ public class BlueStudentMod implements ModInitializer {
             id("alice"),
             FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, AliceEntity::new)
                     .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
+                    .build()
+    );
+
+
+
+
+    public static final EntityType<ShirokoDroneEntity> SHIROKO_DRONE =
+            Registry.register(
+                    Registries.ENTITY_TYPE,
+                    new Identifier(MOD_ID, "shiroko_drone"),
+                    FabricEntityTypeBuilder.<ShirokoDroneEntity>create(SpawnGroup.MISC, ShirokoDroneEntity::new)
+                            .dimensions(EntityDimensions.fixed(0.6f, 0.35f))
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(1)
+                            .build()
+            );
+
+    public static final EntityType<KisakiDragonEntity> KISAKI_DRAGON = Registry.register(
+            Registries.ENTITY_TYPE,
+            new Identifier(MOD_ID, "kisaki_dragon"),
+            FabricEntityTypeBuilder.<KisakiDragonEntity>create(SpawnGroup.MISC, KisakiDragonEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.2f, 1.2f)) // 好みで
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(1)
                     .build()
     );
 

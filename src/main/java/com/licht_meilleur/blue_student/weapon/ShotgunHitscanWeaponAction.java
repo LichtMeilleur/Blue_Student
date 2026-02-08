@@ -22,6 +22,15 @@ public class ShotgunHitscanWeaponAction implements WeaponAction {
         if (!(shooterEntity.getWorld() instanceof ServerWorld sw)) return false;
         if (target == null || !target.isAlive()) return false;
 
+
+        // ★ここを追加：キサキ支援倍率などを反映した最終ダメージ
+        float damage = spec.damage;
+        if (shooterEntity instanceof AbstractStudentEntity se && se.hasKisakiSupportBuff()) {
+            damage *= 1.25f; // 好きな倍率に
+        }
+
+
+
         final Vec3d start = (shooterEntity instanceof AbstractStudentEntity se)
                 ? se.getMuzzlePosApprox()
                 : shooterEntity.getEyePos();
@@ -69,7 +78,9 @@ public class ShotgunHitscanWeaponAction implements WeaponAction {
         // ★ここが「1回だけダメ」
         if (hitCount > 0) {
             DamageSource ds = sw.getDamageSources().mobAttack((LivingEntity) shooterEntity);
-            float total = spec.damage * hitCount;
+
+            float total = damage * hitCount;
+
             target.damage(ds, total);
 
             // ノックバック
