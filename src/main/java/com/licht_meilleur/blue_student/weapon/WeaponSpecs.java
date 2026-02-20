@@ -1,5 +1,6 @@
 package com.licht_meilleur.blue_student.weapon;
 
+import com.licht_meilleur.blue_student.student.StudentForm;
 import com.licht_meilleur.blue_student.student.StudentId;
 
 public class WeaponSpecs {
@@ -142,6 +143,22 @@ public class WeaponSpecs {
             1.0f,   // ★太さ（1ブロック）
             20      // animation ticks
     );
+
+
+        public static WeaponSpec forStudent(StudentId id, StudentForm form, boolean sub) {
+            // sub==true ならサブ武器（sub_muzzle）用
+            // form==BR なら強化版
+            return forStudent(id);
+            /*return switch (id) {
+                case HOSHINO -> (form == StudentForm.BR)
+                        ? (sub ? HOSHINO_BR_SUB : HOSHINO_BR_MAIN)
+                        : (sub ? HOSHINO_SUB    : HOSHINO_MAIN);
+                case ALICE -> (sub ? ALICE_SUB : ALICE_MAIN); /*(form == StudentForm.BR)
+                        ? (sub ? ALICE_BR_SUB : ALICE_BR_MAIN)
+                        : (sub ? ALICE_SUB    : ALICE_MAIN);
+                default -> forStudent(id); // 既存のNORMALメインにfallback
+            };*/
+        }
 
 
 

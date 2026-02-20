@@ -3,6 +3,7 @@ package com.licht_meilleur.blue_student.inventory;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.inventory.Inventories;
 import net.minecraft.inventory.Inventory;
+import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.util.collection.DefaultedList;
@@ -10,6 +11,11 @@ import net.minecraft.util.collection.DefaultedList;
 public class StudentInventory implements Inventory {
     private final DefaultedList<ItemStack> stacks;
     private final Runnable markDirtyCallback;
+
+
+
+
+    private final SimpleInventory equipInv = new SimpleInventory(1); // ★追加
 
     public StudentInventory(int size, Runnable markDirtyCallback) {
         this.stacks = DefaultedList.ofSize(size, ItemStack.EMPTY);
@@ -26,10 +32,27 @@ public class StudentInventory implements Inventory {
 
     public void writeNbt(NbtCompound nbt) {
         Inventories.writeNbt(nbt, stacks);
+
+        // ★追加：装備スロット(1)を保存
+        NbtCompound equipTag = new NbtCompound();
+        equipTag.put("slot0", equipInv.getStack(0).writeNbt(new NbtCompound()));
+        nbt.put("equipInv", equipTag);
     }
 
     public void readNbt(NbtCompound nbt) {
         Inventories.readNbt(nbt, stacks);
+
+        // ★追加：装備スロット(1)を復元
+        if (nbt.contains("equipInv")) {
+            NbtCompound equipTag = nbt.getCompound("equipInv");
+            if (equipTag.contains("slot0")) {
+                equipInv.setStack(0, ItemStack.fromNbt(equipTag.getCompound("slot0")));
+            } else {
+                equipInv.setStack(0, ItemStack.EMPTY);
+            }
+        } else {
+            equipInv.setStack(0, ItemStack.EMPTY);
+        }
     }
 
     @Override
@@ -86,4 +109,8 @@ public class StudentInventory implements Inventory {
         stacks.clear();
         markDirty();
     }
+
+    public Inventory getEquipInv() { return equipInv; }
+
+    public ItemStack getBrEquipStack() { return equipInv.getStack(0); }
 }

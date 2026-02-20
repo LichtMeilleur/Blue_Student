@@ -16,6 +16,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.network.PacketByteBuf;
+import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
@@ -67,6 +68,14 @@ public class StudentScreen extends HandledScreen<StudentScreenHandler> {
     private static final int WEAPON_X = 48;
     private static final int WEAPON_Y = 200;
 
+    // 例：装備枠の背景
+    private static final int EQUIP_SLOT_X = 150;
+    private static final int EQUIP_SLOT_Y = 90;
+
+    private static final int EQUIP_BG_X = 150;
+    private static final int EQUIP_BG_Y = 90;
+    private static final int EQUIP_BG_SIZE = 36;
+
     // ====== 透明クリック領域（ボタン）======
     // Follow / Security のクリック判定だけ欲しいので透明ボタンを置く
     private ButtonWidget followBtn;
@@ -114,6 +123,8 @@ public class StudentScreen extends HandledScreen<StudentScreenHandler> {
             ctx.drawTexture(SLOT, sx, sy, 0, 0, 18, 18, 18, 18);
         }
 
+        ctx.drawTexture(SLOT, x + EQUIP_SLOT_X, y + EQUIP_SLOT_Y, 0, 0, 18, 18, 18, 18);
+
         // --- AI表示（参照型） ---
         IStudentEntity se = handler.entity;
 
@@ -143,6 +154,20 @@ public class StudentScreen extends HandledScreen<StudentScreenHandler> {
         ctx.drawText(textRenderer, sid.getWeaponText(), x + WEAPON_X, y + WEAPON_Y, 0x1A1A1A, false);
         drawScaledText(ctx, "Weapon", x + 48,    y + 190,    0x101010, 1.0f);
 
+
+        // --- 装備枠（36x36） ---
+        IStudentEntity se2 = handler.entity;
+        StudentId sid2 = (se2 != null) ? se2.getStudentId() : StudentId.SHIROKO;
+
+        Identifier equipSlotTex = com.licht_meilleur.blue_student.student.StudentEquipments.getBrSlotTexture(sid2);
+
+        ctx.drawTexture(
+                equipSlotTex,
+                x + EQUIP_BG_X, y + EQUIP_BG_Y,
+                0, 0,
+                EQUIP_BG_SIZE, EQUIP_BG_SIZE,
+                EQUIP_BG_SIZE, EQUIP_BG_SIZE
+        );
     }
 
     @Override
@@ -233,5 +258,30 @@ public class StudentScreen extends HandledScreen<StudentScreenHandler> {
         ctx.getMatrices().scale(scale, scale, 1.0f);
         ctx.drawText(this.textRenderer, text, 0, 0, color, false);
         ctx.getMatrices().pop();
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // まず通常処理（スロット等）
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+
+        // equip枠(36x36)の当たり判定
+        int bx = this.x + EQUIP_BG_X;
+        int by = this.y + EQUIP_BG_Y;
+
+        if (mouseX >= bx && mouseX < bx + EQUIP_BG_SIZE && mouseY >= by && mouseY < by + EQUIP_BG_SIZE) {
+
+            // ★装備スロットが存在する場合だけ（supportsBr()で出してないなら null）
+            int equipSlotIndex = handler.getEquipSlotIndex(); // ←下で追加する getter
+            if (equipSlotIndex >= 0 && equipSlotIndex < handler.slots.size()) {
+                var slot = handler.slots.get(equipSlotIndex);
+                if (slot != null) {
+                    // left/right クリック両対応（そのまま渡す）
+                    this.onMouseClick(slot, slot.id, button, SlotActionType.PICKUP);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

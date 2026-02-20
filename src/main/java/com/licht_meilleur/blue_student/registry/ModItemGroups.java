@@ -21,6 +21,9 @@ public class ModItemGroups {
                         .entries((ctx, entries) -> {
                             entries.add(BlueStudentMod.TABLET_BLOCK_ITEM);
 
+
+
+                            entries.add(BlueStudentMod.HOSHINO_BR_EQUIP_ITEM);
                             // もし将来追加するならここに並べる
                             // entries.add(BlueStudentMod.SHIROKO_BED_ITEM);
                             // entries.add(BlueStudentMod.HINA_BED_ITEM);

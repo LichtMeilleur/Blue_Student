@@ -1,5 +1,6 @@
 package com.licht_meilleur.blue_student.state;
 
+import com.licht_meilleur.blue_student.student.StudentForm;
 import com.licht_meilleur.blue_student.student.StudentId;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
@@ -8,6 +9,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.PersistentState;
+
+import java.util.EnumMap;
+import java.util.Map;
+
+
+
 
 import java.util.HashMap;
 import java.util.Map;
@@ -181,11 +188,50 @@ public class StudentWorldState extends PersistentState {
         public BlockPos pos;
         public BlockPos bed;
 
+        public String form = "normal";
+
         public StudentData(UUID uuid, String dim, BlockPos pos, BlockPos bed) {
             this.uuid = uuid;
             this.dimension = dim;
             this.pos = pos;
             this.bed = bed;
+
+            this.form = form;
         }
     }
+
+    public void clearBed(StudentId sid) {
+        StudentData d = getData(sid);
+        if (d == null) return;
+        d.bed = null;
+        markDirty();
+    }
+    // ★Packed保存
+    private final Map<StudentId, NbtCompound> packedNbt = new EnumMap<>(StudentId.class);
+    private final Map<StudentId, Boolean> packedFlag = new EnumMap<>(StudentId.class);
+
+
+
+    public void setPacked(StudentId sid, NbtCompound nbt) { packedNbt.put(sid, nbt.copy()); markDirty(); }
+    public NbtCompound getPacked(StudentId sid) { return packedNbt.get(sid); }
+    public void clearPacked(StudentId sid) { packedNbt.remove(sid); markDirty(); }
+
+    public void setPackedFlag(StudentId sid, boolean v) { packedFlag.put(sid, v); markDirty(); }
+    public boolean isPacked(StudentId sid) { return packedFlag.getOrDefault(sid, false); }
+
+
+    // StudentWorldState.java に追加
+    public StudentForm getForm(StudentId sid) {
+        StudentData d = getData(sid);
+        if (d == null) return StudentForm.NORMAL;
+        return StudentForm.fromKey(d.form);
+    }
+
+    public void setForm(StudentId sid, StudentForm form) {
+        StudentData d = getData(sid);
+        if (d == null) return;
+        d.form = form.asString();
+        markDirty();
+    }
+
 }

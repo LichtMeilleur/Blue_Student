@@ -56,51 +56,79 @@ public class ModPackets {
         // =========================================
         // CALL (召喚)
         // =========================================
+        // =========================================
+// CALL (召喚)
+// =========================================
         ServerPlayNetworking.registerGlobalReceiver(CALL_STUDENT, (server, player, handler, buf, responseSender) -> {
 
             final String sidStr = buf.readString(64);
             final BlockPos tabletPos = buf.readBlockPos();
 
             server.execute(() -> {
+                try {
+                    ServerWorld sw = player.getServerWorld();
+                    StudentWorldState state = StudentWorldState.get(sw);
 
-                ServerWorld sw = player.getServerWorld();
-                StudentWorldState state = StudentWorldState.get(sw);
+                    StudentId sid = parseStudentId(sidStr);
 
-                StudentId sid = parseStudentId(sidStr);
+                    System.out.println("[BlueStudent] CALL start sid=" + sid.asString() + " pos=" + tabletPos
+                            + " dim=" + sw.getRegistryKey().getValue());
 
-                if (state.hasStudent(sid)) {
-                    player.sendMessage(Text.literal("Already summoned"), false);
-                    return;
+                    if (state.hasStudent(sid)) {
+                        player.sendMessage(Text.literal("Already summoned"), false);
+                        System.out.println("[BlueStudent] CALL blocked by hasStudent sid=" + sid.asString());
+                        return;
+                    }
+
+                    Entity raw = switch (sid) {
+                        case SHIROKO -> BlueStudentMod.SHIROKO.create(sw);
+                        case HOSHINO -> BlueStudentMod.HOSHINO.create(sw);
+                        case HINA    -> BlueStudentMod.HINA.create(sw);
+                        case ALICE   -> BlueStudentMod.ALICE.create(sw);
+                        case KISAKI  -> BlueStudentMod.KISAKI.create(sw);
+                    };
+
+                    if (raw == null) {
+                        System.out.println("[BlueStudent] CALL raw==null sid=" + sid.asString());
+                        player.sendMessage(Text.literal("Spawn failed (raw==null)"), false);
+                        return;
+                    }
+
+                    if (!(raw instanceof IStudentEntity se)) {
+                        System.out.println("[BlueStudent] CALL raw not IStudentEntity sid=" + sid.asString()
+                                + " class=" + raw.getClass().getName());
+                        player.sendMessage(Text.literal("Spawn failed (type mismatch)"), false);
+                        return;
+                    }
+
+                    BlockPos spawn = tabletPos.up();
+
+                    raw.refreshPositionAndAngles(
+                            spawn.getX() + 0.5,
+                            spawn.getY(),
+                            spawn.getZ() + 0.5,
+                            player.getYaw(),
+                            0
+                    );
+
+                    se.setOwnerUuid(player.getUuid());
+
+                    boolean ok = sw.spawnEntity(raw);
+                    System.out.println("[BlueStudent] CALL spawnEntity ok=" + ok + " uuid=" + raw.getUuidAsString());
+
+                    // ★位置＋DIM保存
+                    state.setStudent(sid, raw.getUuid(), sw, spawn);
+
+                    player.sendMessage(Text.literal("Summoned"), false);
+
+
+                    System.out.println("[BlueStudent] CALL done sid=" + sid.asString());
+
+                } catch (Throwable t) {
+                    System.out.println("[BlueStudent] CALL crashed: " + t);
+                    t.printStackTrace(); // ★これが欲しい
+                    player.sendMessage(Text.literal("CALL crashed. See log."), false);
                 }
-
-                Entity raw = switch (sid) {
-                    case SHIROKO -> BlueStudentMod.SHIROKO.create(sw);
-                    case HOSHINO -> BlueStudentMod.HOSHINO.create(sw);
-                    case HINA    -> BlueStudentMod.HINA.create(sw);
-                    case ALICE   -> BlueStudentMod.ALICE.create(sw);
-                    case KISAKI  -> BlueStudentMod.KISAKI.create(sw);
-                };
-
-                if (!(raw instanceof IStudentEntity se)) return;
-
-                BlockPos spawn = tabletPos.up();
-
-                raw.refreshPositionAndAngles(
-                        spawn.getX() + 0.5,
-                        spawn.getY(),
-                        spawn.getZ() + 0.5,
-                        player.getYaw(),
-                        0
-                );
-
-                se.setOwnerUuid(player.getUuid());
-
-                sw.spawnEntity(raw);
-
-                // ★位置＋DIM保存（重要）
-                state.setStudent(sid, raw.getUuid(), sw, spawn);
-
-                player.sendMessage(Text.literal("Summoned"), false);
             });
         });
 
@@ -138,14 +166,17 @@ public class ModPackets {
                             spawn.getZ() + 0.5,
                             player.getYaw(),
                             0
+
                     );
+                    state.setStudent(sid, uuid, sw, spawn);
+
                     return;
                 }
 
 
                 // ======================
-                // 別ディメンション
-                // ======================
+// 別ディメンション
+// ======================
                 StudentWorldState.StudentData data = state.getData(sid);
                 if (data == null) return;
 
@@ -160,17 +191,30 @@ public class ModPackets {
                 Entity other = oldWorld.getEntity(uuid);
                 if (other == null || !other.isAlive()) return;
 
-                Entity moved = other.moveToWorld(sw);
+// ★復活中はCallBack無効（即復活事故防止）
+                if (other instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity ase) {
+                    if (ase.isLifeLockedForGoal()) {
+                        player.sendMessage(Text.literal("Student is respawning..."), false);
+                        return;
+                    }
 
+                    boolean ok = ase.teleportToWorldForCallback(sw, spawn, player.getYaw());
+                    if (ok) {
+                        state.setStudent(sid, uuid, sw, spawn); // ★DIM/POS更新
+                    }
+                    return;
+                }
+
+// fallback（基本起きないはず）
+                Entity moved = other.moveToWorld(sw);
                 if (moved != null) {
                     moved.refreshPositionAndAngles(
-                            spawn.getX() + 0.5,
-                            spawn.getY(),
-                            spawn.getZ() + 0.5,
-                            player.getYaw(),
-                            0
+                            spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5,
+                            player.getYaw(), 0
                     );
+                    state.setStudent(sid, uuid, sw, spawn);
                 }
+
             });
         });
     }

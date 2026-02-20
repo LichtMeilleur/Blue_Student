@@ -13,6 +13,7 @@ import com.licht_meilleur.blue_student.network.ModPackets;
 import com.licht_meilleur.blue_student.registry.ModScreenHandlers;
 import com.licht_meilleur.blue_student.student.StudentId;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
 import net.minecraft.block.AbstractBlock;
@@ -153,6 +154,21 @@ public class BlueStudentMod implements ModInitializer {
             BlockEntityType.Builder.create(TabletBlockEntity::new, TABLET_BLOCK).build(null)
     );
 
+
+
+
+    // BlueStudentMod.java
+
+    public static final Item HOSHINO_BR_EQUIP_ITEM =
+            Registry.register(Registries.ITEM, id("hoshino_br_equip_item"),
+                    new Item(new Item.Settings().maxCount(1)));
+
+    public static final Item ALICE_BR_EQUIP_ITEM =
+            Registry.register(Registries.ITEM, id("alice_br_equip_item"),
+                    new Item(new Item.Settings().maxCount(1)));
+
+
+
     @Override
     public void onInitialize() {
         System.out.println("[BlueStudent] onInitialize start");
@@ -165,6 +181,8 @@ public class BlueStudentMod implements ModInitializer {
         FabricDefaultAttributeRegistry.register(ALICE, AbstractStudentEntity.createAttributes());
         //FabricDefaultAttributeRegistry.register(HOSHINO, AbstractStudentEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(HINA, HinaEntity.createAttributes());
+
+
 
 
         ModScreenHandlers.register();

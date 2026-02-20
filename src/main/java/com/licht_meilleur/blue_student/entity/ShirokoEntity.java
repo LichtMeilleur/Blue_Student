@@ -119,6 +119,8 @@ public class ShirokoEntity extends AbstractStudentEntity {
         super.initDataTracker();
         this.dataTracker.startTracking(DRONE_START_TRIGGER, 0);
         this.dataTracker.startTracking(SHOT_TRIGGER, 0);
+       //エラーが出たときのショットトリガー差し替え用
+       // this.dataTracker.startTracking(DRONE_SHOT_TRIGGER, 0);
 
     }
     public void requestDroneStart() {

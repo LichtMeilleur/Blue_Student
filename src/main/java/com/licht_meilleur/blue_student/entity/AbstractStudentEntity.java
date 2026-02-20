@@ -1,5 +1,6 @@
 package com.licht_meilleur.blue_student.entity;
 
+import com.licht_meilleur.blue_student.BlueStudentMod;
 import com.licht_meilleur.blue_student.bed.BedLinkManager;
 import com.licht_meilleur.blue_student.block.OnlyBedBlock;
 import com.licht_meilleur.blue_student.block.entity.OnlyBedBlockEntity;
@@ -12,6 +13,7 @@ import com.licht_meilleur.blue_student.weapon.WeaponSpec;
 import com.licht_meilleur.blue_student.weapon.WeaponSpecs;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.dimension.v1.FabricDimensions;
 import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.enums.BedPart;
@@ -38,6 +40,7 @@ import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.screen.ScreenHandler;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
@@ -47,6 +50,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.TeleportTarget;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoEntity;
@@ -223,8 +227,29 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
     private int dimFollowCooldown = 0;
 
-    private int dimTransferCooldown = 0;
+
+    private boolean owRespawnQueued = false;
+    private int owRespawnCooldown = 0;
+
+    // 次元移動（FOLLOW/Callback共通）
     private boolean dimTransferQueued = false;
+    private int dimTransferCooldown = 0;
+
+    // パック方式（移動中にentity消して復元する）
+    private boolean packedForDimTransfer = false;
+
+
+    private boolean isBrMode = false;
+
+
+
+    // ===== Form (NORMAL / BR) =====
+    private static final TrackedData<Integer> FORM_ID =
+            DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
+
+    public enum StudentForm { NORMAL, BR }
+
+
 
 
 
@@ -480,11 +505,20 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
         tickLifeStateServer();
 
+        // ★フォームのTick（まだ使ってないなら後でOK）
+        tickFormFromEquipment();
+
+
+        if (this.age % 20 == 0) {
+            tickFormFromEquipment();
+        }
+
         // 食事の表示タイマー
         if (eatingServerTicks > 0) {
             eatingServerTicks--;
             if (eatingServerTicks <= 0) eatingSlot = -1;
         }
+
 
         // ★スキル共通Tick（まだ使ってないなら後でOK）
         tickSkillCommon();
@@ -494,15 +528,23 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         // server tick のどこか（lifeLock解除後・ownerOnline判定の後あたりが安全）
         if (dimTransferCooldown > 0) dimTransferCooldown--;
 
+        if (owRespawnCooldown > 0) owRespawnCooldown--;
+
+
+        handleFollowDimTransfer();
+
         PlayerEntity owner = getOwnerPlayer();
         if (owner instanceof ServerPlayerEntity sp) {
-            if (getAiMode() == StudentAiMode.FOLLOW && !isLifeLockedForGoal()) {
-                ServerWorld dest = sp.getServerWorld();
-                if (dest != this.getWorld()) {
-                    queueTeleportToOwnerDimension(sp, dest);
+            // ★復活中はディメンション追従しない（復活処理とぶつかる）
+            if (!isLifeLockedForGoal() && getAiMode() == StudentAiMode.FOLLOW) {
+                if (sp.getServerWorld() != this.getWorld()) {
+                    queueTeleportToOwnerDimension(sp); // ★引数は1つ
                 }
             }
         }
+
+
+
 
 
 
@@ -651,11 +693,35 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     private void tickLifeStateServer() {
         ServerWorld sw = (ServerWorld) this.getWorld();
 
+
+
+
+        if (isLifeLocked()) {
+            this.setAiDisabled(true);
+            this.setNoGravity(true);
+            this.setGhost(true);
+            this.setInvulnerable(false);
+        }
+
+
+
+
+        // ★復活系は Overworld でしか進めない（別次元死亡の安定化）
+        if (isLifeLocked() && respawnBedFoot != null) {
+            ServerWorld ow = sw.getServer().getOverworld();
+            if (ow != null && sw != ow) {
+                queueTeleportToOverworldForRespawn(ow);
+                return;
+            }
+        }
+
+
         // 復活処理中にベッドが壊れたら即復帰
         boolean bedOk = (respawnBedFoot != null && isValidLinkedBed(sw, respawnBedFoot));
         if (!bedOk && isLifeLocked()) {
-            BedLinkManager.clearBedPos(ownerUuid, getStudentId());
+            StudentWorldState.get(sw.getServer()).clearBed(getStudentId());
             forceWakeUp(sw, this.getBlockPos(), true);
+
             return;
         }
 
@@ -1157,7 +1223,19 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     public void writeCustomDataToNbt(NbtCompound nbt) {
         super.writeCustomDataToNbt(nbt);
 
+        nbt.putInt("StudentForm", this.dataTracker.get(FORM_ID));
+
+        nbt.putInt("DimTransferCooldown", dimTransferCooldown);
+        nbt.putBoolean("DimTransferQueued", dimTransferQueued);
+
         nbt.putBoolean("ForcedSecurityOffline", forcedSecurityBecauseOwnerOffline);
+
+        nbt.putInt("LifeState", this.lifeState.ordinal());
+        nbt.putInt("LifeTimer", this.lifeTimer);
+
+        if (this.respawnBedFoot != null) nbt.putLong("RespawnBedFoot", this.respawnBedFoot.asLong());
+        if (this.respawnSafePos != null) nbt.putLong("RespawnSafePos", this.respawnSafePos.asLong());
+
 
         if (ownerUuid != null) nbt.putUuid("Owner", ownerUuid);
         nbt.putInt("AiMode", getAiMode().id);
@@ -1180,6 +1258,17 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     @Override
     public void readCustomDataFromNbt(NbtCompound nbt) {
         super.readCustomDataFromNbt(nbt);
+
+        if (nbt.contains("StudentForm")) {
+            this.dataTracker.set(FORM_ID, nbt.getInt("StudentForm"));
+        }
+
+
+        dimTransferCooldown = nbt.getInt("DimTransferCooldown");
+        dimTransferQueued = nbt.getBoolean("DimTransferQueued");
+
+
+
 
         forcedSecurityBecauseOwnerOffline = nbt.getBoolean("ForcedSecurityOffline");
 
@@ -1206,12 +1295,22 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         this.setAiDisabled(false);
         this.ghost = false;
 
-        this.lifeState = StudentLifeState.NORMAL;
-        this.dataTracker.set(LIFE_STATE, StudentLifeState.NORMAL.ordinal());
 
-        this.respawnBedFoot = null;
-        this.respawnSafePos = null;
-        this.lifeTimer = 0;
+        if (nbt.contains("LifeState")) {
+            int idx = nbt.getInt("LifeState");
+            idx = Math.max(0, Math.min(idx, StudentLifeState.values().length - 1));
+            this.lifeState = StudentLifeState.values()[idx];
+            this.dataTracker.set(LIFE_STATE, this.lifeState.ordinal());
+        }
+
+        this.lifeTimer = nbt.getInt("LifeTimer");
+
+        this.respawnBedFoot = nbt.contains("RespawnBedFoot")
+                ? BlockPos.fromLong(nbt.getLong("RespawnBedFoot")) : null;
+
+        this.respawnSafePos = nbt.contains("RespawnSafePos")
+                ? BlockPos.fromLong(nbt.getLong("RespawnSafePos")) : null;
+
 
         this.eatingSlot = -1;
         this.eatingServerTicks = 0;
@@ -1240,8 +1339,11 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         this.dataTracker.startTracking(SHOT_TRIGGER, 0);
         this.dataTracker.startTracking(RELOAD_TRIGGER, 0);
 
+        this.dataTracker.startTracking(FORM_ID, 0);
+
 
     }
+
 
     // ===== remove =====
     @Override
@@ -1309,34 +1411,44 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
     // ====== ベッド復活：Overworld固定版（インベントリ保持）=====
     private void startBedRespawn(ServerWorld sw) {
-        BlockPos bed = null;
-        if (ownerUuid != null) {
+        MinecraftServer server = sw.getServer();
+        ServerWorld overworld = server.getOverworld();
+
+        StudentWorldState st = StudentWorldState.get(server);
+
+        // 1) state優先
+        BlockPos bed = st.getBed(getStudentId());
+
+        // 2) 後方互換：BedLinkManager（同一セッション内で有効）
+        if (bed == null && ownerUuid != null) {
             bed = BedLinkManager.getBedPos(ownerUuid, getStudentId());
+            if (bed != null) st.setBed(getStudentId(), bed); // ★stateへ移す
         }
 
+        // 3) 最後の保険：Overworldで近くをスキャン（昔の挙動）
         if (bed == null) {
-            bed = findNearestBedFoot(sw, getStudentId(), this.getBlockPos(), 96);
-            if (bed != null && ownerUuid != null) {
-                BedLinkManager.setBedPos(ownerUuid, getStudentId(), bed);
-            }
+            bed = findNearestBedFoot(overworld, getStudentId(), this.getBlockPos(), 96);
+            if (bed != null) st.setBed(getStudentId(), bed); // ★stateへ移す
         }
 
         this.respawnBedFoot = null;
         this.respawnSafePos = null;
 
-        if (bed != null && !isValidLinkedBed(sw, bed)) {
-            BedLinkManager.clearBedPos(ownerUuid, getStudentId());
-            bed = null;
+        if (bed == null) {
+            st.clearStudent(getStudentId());
+            this.discard();
+            return;
         }
 
-        if (bed == null) {
-            StudentWorldState.get(sw).clearStudent(getStudentId());
+        if (!isValidLinkedBed(overworld, bed)) {
+            st.clearBed(getStudentId());
+            st.clearStudent(getStudentId());
             this.discard();
             return;
         }
 
         this.respawnBedFoot = bed;
-        this.respawnSafePos = findSafeRespawnPosNearBed(sw, bed);
+        this.respawnSafePos = findSafeRespawnPosNearBed(overworld, bed);
 
         this.setHealth(1f);
         this.getNavigation().stop();
@@ -1351,7 +1463,18 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
         setLifeState(StudentLifeState.EXITING);
         this.lifeTimer = 60;
+
+        if (this.getWorld() != overworld) {
+            queueTeleportToOverworldForRespawn(overworld);
+        }
+        System.out.println("[BlueStudent] startBedRespawn");
+        System.out.println("  CurrentDim = " + sw.getRegistryKey().getValue());
+        System.out.println("  BedPos = " + bed);
+        System.out.println("  LifeState = " + lifeState);
+
+
     }
+
 
 
     protected @Nullable BlockPos findNearestBedFoot(ServerWorld sw, StudentId sid, BlockPos origin, int r) {
@@ -1648,71 +1771,308 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     }
 
 
-    private void teleportToOwnerDimension(ServerPlayerEntity owner, ServerWorld dest) {
-        if (dimFollowCooldown > 0) { dimFollowCooldown--; return; }
-        dimFollowCooldown = 40;
 
-        this.stopRiding();
-        this.removeAllPassengers();
-
-        Entity movedRaw = this.moveToWorld(dest);
-        if (!(movedRaw instanceof AbstractStudentEntity moved)) return;
-
-        BlockPos safe = owner.getBlockPos().up();
-
-        moved.refreshPositionAndAngles(
-                safe.getX() + 0.5,
-                safe.getY(),
-                safe.getZ() + 0.5,
-                owner.getYaw(),
-                0
-        );
-
-        moved.setVelocity(0,0,0);
-        moved.getNavigation().stop();
-    }
-
-    private void queueTeleportToOwnerDimension(ServerPlayerEntity owner, ServerWorld dest) {
+    private void queueTeleportToOwnerDimension(ServerPlayerEntity ownerHint) {
         if (this.getWorld().isClient) return;
         if (dimTransferQueued) return;
         if (dimTransferCooldown > 0) return;
+        if (ownerUuid == null) return;
 
         dimTransferQueued = true;
-        dimTransferCooldown = 20; // 1秒に1回まで（好みで調整）
+        dimTransferCooldown = 40;
 
-        // ★次tickで実行（tick中にmoveToWorldしない）
-        dest.getServer().execute(() -> {
+        MinecraftServer server = ownerHint.getServer();
+
+        server.execute(() -> {
             dimTransferQueued = false;
 
-            if (!(this.getWorld() instanceof ServerWorld src)) return;
             if (this.isRemoved() || !this.isAlive()) return;
+            if (!(this.getWorld() instanceof ServerWorld src)) return;
 
-            // オーナーがもう別の次元に移動してたら更新
-            ServerWorld actualDest = owner.getServerWorld();
-            if (actualDest == src) return;
+            ServerPlayerEntity owner = server.getPlayerManager().getPlayer(ownerUuid);
+            if (owner == null || !owner.isAlive()) return;
 
-            // ★乗り物/乗客の関係を全部切る（unknown entity passenger 対策）
+            ServerWorld dest = owner.getServerWorld();
+            if (dest == src) return;
+
+            // pre-clean（重要）
             this.stopRiding();
             this.removeAllPassengers();
+            this.getNavigation().stop();
+            this.setVelocity(0, 0, 0);
+            this.velocityDirty = true;
+            this.fallDistance = 0;
 
-            // 安全な座標（とりあえずオーナー周辺）
-            BlockPos base = owner.getBlockPos();
-            BlockPos safe = base.up(); // まず簡易。後で安全判定に置き換え推奨
+            BlockPos safe = findSafeNearPlayer(dest, owner.getBlockPos());
 
-            Entity movedRaw = this.moveToWorld(actualDest);
-            if (!(movedRaw instanceof AbstractStudentEntity moved)) return;
+            AbstractStudentEntity moved = teleportTo(dest, safe, owner.getYaw());
+            if (moved == null) return;
 
-            moved.refreshPositionAndAngles(
-                    safe.getX() + 0.5, safe.getY(), safe.getZ() + 0.5,
-                    owner.getYaw(), 0
-            );
             moved.setVelocity(0, 0, 0);
             moved.getNavigation().stop();
             moved.velocityDirty = true;
+
+            moved.dimTransferCooldown = Math.max(moved.dimTransferCooldown, 40);
+            moved.fallDistance = 0;
+            moved.noFallTicks = Math.max(moved.noFallTicks, 20);
         });
     }
 
 
+
+    private void queueTeleportToOverworldForRespawn(ServerWorld overworld) {
+        if (this.getWorld().isClient) return;
+        if (owRespawnQueued) return;
+        if (owRespawnCooldown > 0) return;
+
+        owRespawnQueued = true;
+        owRespawnCooldown = 20;
+
+        MinecraftServer server = overworld.getServer();
+        server.execute(() -> {
+            owRespawnQueued = false;
+
+            if (this.isRemoved() || !this.isAlive()) return;
+            if (!(this.getWorld() instanceof ServerWorld src)) return;
+
+            ServerWorld ow = server.getOverworld();
+            if (ow == null) return;
+            if (src == ow) return;
+
+            // pre-clean
+            this.stopRiding();
+            this.removeAllPassengers();
+            this.getNavigation().stop();
+            this.setVelocity(0, 0, 0);
+            this.velocityDirty = true;
+            this.fallDistance = 0;
+
+            // いったん「現在座標のまま」OWへ（次のlife処理でベッド位置に寄せ直す）
+            BlockPos p = this.getBlockPos();
+            TeleportTarget target = new TeleportTarget(
+                    new Vec3d(p.getX() + 0.5, p.getY(), p.getZ() + 0.5),
+                    Vec3d.ZERO,
+                    this.getYaw(),
+                    this.getPitch()
+            );
+
+            Entity teleported = FabricDimensions.teleport(this, ow, target);
+            if (teleported == null) {
+                System.out.println("[BlueStudent] FabricDimensions.teleport FAILED");
+                return;
+            }
+
+            System.out.println("[BlueStudent] FabricDimensions.teleport OK -> " +
+                    ((ServerWorld) teleported.getWorld()).getRegistryKey().getValue());
+
+            if (teleported instanceof AbstractStudentEntity moved) {
+                moved.owRespawnCooldown = Math.max(moved.owRespawnCooldown, 20);
+            }
+        });
+    }
+
+
+    private BlockPos findSafeNearPlayer(ServerWorld world, BlockPos base) {
+        BlockPos.Mutable m = new BlockPos.Mutable();
+
+        // 近い順に軽く探す（半径2・高さ±2）
+        for (int r = 0; r <= 2; r++) {
+            for (int dy = -2; dy <= 2; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    for (int dz = -r; dz <= r; dz++) {
+                        m.set(base.getX() + dx, base.getY() + dy, base.getZ() + dz);
+                        if (isSafeStandPos(world, m)) {
+                            return m.toImmutable();
+                        }
+                    }
+                }
+            }
+        }
+        return base.up(); // フォールバック
+    }
+    private @Nullable AbstractStudentEntity teleportTo(ServerWorld dest, BlockPos safe, float yaw) {
+        TeleportTarget target = new TeleportTarget(
+                new Vec3d(safe.getX() + 0.5, safe.getY(), safe.getZ() + 0.5),
+                Vec3d.ZERO,
+                yaw,
+                0f
+        );
+
+        Entity movedRaw = FabricDimensions.teleport(this, dest, target);
+        return (movedRaw instanceof AbstractStudentEntity moved) ? moved : null;
+    }
+    public boolean teleportToWorldForCallback(ServerWorld dest, BlockPos spawn, float yaw) {
+        if (this.getWorld().isClient) return false;
+        if (isLifeLockedForGoal()) return false;
+
+        AbstractStudentEntity moved = teleportTo(dest, spawn, yaw);
+        if (moved == null) return false;
+
+        moved.setVelocity(0,0,0);
+        moved.getNavigation().stop();
+        moved.velocityDirty = true;
+        moved.fallDistance = 0;
+        moved.noFallTicks = Math.max(moved.noFallTicks, 20);
+        return true;
+    }
+
+    public boolean isLifeLockedPublic() {
+        return isLifeLocked(); // 既存privateを呼ぶだけ
+    }
+
+    private static final boolean BS_DEBUG = true;
+
+    private void bsLog(String tag) {
+        if (!BS_DEBUG) return;
+        if (!(this.getWorld() instanceof ServerWorld sw)) return;
+
+        String dim = sw.getRegistryKey().getValue().toString();
+        String ls = String.valueOf(this.lifeState);
+        String bed = String.valueOf(this.respawnBedFoot);
+        UUID u = this.getUuid();
+
+        System.out.println("[BlueStudent][" + tag + "] sid=" + getStudentId().asString()
+                + " uuid=" + u
+                + " dim=" + dim
+                + " life=" + ls
+                + " bed=" + bed
+                + " hp=" + this.getHealth() + "/" + this.getMaxHealth()
+                + " removed=" + this.isRemoved()
+                + " alive=" + this.isAlive());
+    }
+
+    public void packAndDiscardForTransfer(ServerWorld currentWorld) {
+        if (this.getWorld().isClient) return;
+        if (packedForDimTransfer) return;
+        packedForDimTransfer = true;
+
+        bsLog("PACK_START");
+
+        var server = currentWorld.getServer();
+        var st = StudentWorldState.get(server);
+
+        NbtCompound full = new NbtCompound();
+        this.writeNbt(full);                 // ★全部入る（推奨）
+        st.setPacked(getStudentId(), full);  // ★永続に保存（後述）
+
+        // state上の「今はpacked中」を立てる
+        st.setPackedFlag(getStudentId(), true);
+
+        this.discard();
+        bsLog("PACK_DISCARD");
+    }
+
+    public static boolean spawnFromPacked(ServerWorld dest, StudentId sid, BlockPos spawnPos, float yaw) {
+        var server = dest.getServer();
+        var st = StudentWorldState.get(server);
+
+        NbtCompound packed = st.getPacked(sid);
+        if (packed == null) return false;
+
+        // entity生成
+        Entity raw = switch (sid) {
+            case SHIROKO -> BlueStudentMod.SHIROKO.create(dest);
+            case HOSHINO -> BlueStudentMod.HOSHINO.create(dest);
+            case HINA    -> BlueStudentMod.HINA.create(dest);
+            case ALICE   -> BlueStudentMod.ALICE.create(dest);
+            case KISAKI  -> BlueStudentMod.KISAKI.create(dest);
+        };
+
+        if (!(raw instanceof AbstractStudentEntity ase)) return false;
+
+        ase.readNbt(packed); // ★全部復元
+        ase.refreshPositionAndAngles(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, yaw, 0);
+
+        dest.spawnEntity(ase);
+
+        // state更新（uuid/dim/pos）
+        st.setStudent(sid, ase.getUuid(), dest, spawnPos);
+
+        // packed解除
+        st.setPackedFlag(sid, false);
+        st.clearPacked(sid);
+
+        ase.bsLog("UNPACK_SPAWN");
+        return true;
+    }
+
+    private void handleFollowDimTransfer() {
+        if (!(getWorld() instanceof ServerWorld sw)) return;
+        if (ownerUuid == null) return;
+        if (isLifeLocked()) return;
+        if (getAiMode() != StudentAiMode.FOLLOW) return;
+
+        if (dimTransferCooldown > 0) { dimTransferCooldown--; return; }
+        if (dimTransferQueued) return;
+
+        var server = sw.getServer();
+        ServerPlayerEntity owner = server.getPlayerManager().getPlayer(ownerUuid);
+        if (owner == null) return;
+
+        ServerWorld dest = owner.getServerWorld();
+        if (dest == sw) return;
+
+        dimTransferQueued = true;
+        dimTransferCooldown = 40; // 2秒
+
+        bsLog("FOLLOW_DIM_QUEUE");
+
+        server.execute(() -> {
+            dimTransferQueued = false;
+            if (this.isRemoved() || !this.isAlive()) return;
+
+            // 1) packして消す
+            packAndDiscardForTransfer(sw);
+
+            // 2) dest側にspawn（owner付近）
+            BlockPos spawn = owner.getBlockPos().up();
+            spawnFromPacked(dest, getStudentId(), spawn, owner.getYaw());
+        });
+    }
+    @Override
+    public boolean canUsePortals() {
+        return false; // 生徒はポータルを使わない
+    }
+
+
+// ===== フォーム管理 =====
+private void tickFormFromEquipment() {
+    if (!(this.getWorld() instanceof ServerWorld sw)) return;
+
+    ItemStack equip = this.studentInventory.getBrEquipStack();
+    StudentForm desired = StudentEquipments.isBrEquipped(getStudentId(), equip) ? StudentForm.BR : StudentForm.NORMAL;
+
+    if (getForm() != desired) {
+        setForm(desired);
+        applyFormStatsAndAi(desired); // ★あなたが作る（防御/HP/AI切替）
+        // 永続化したいなら StudentWorldState に form 保存も後で追加
+    }
+}
+
+    private ItemStack getBrEquipStack() {
+        if (!(getStudentInventory() instanceof com.licht_meilleur.blue_student.inventory.StudentInventory si)) {
+            return ItemStack.EMPTY;
+        }
+        return si.getBrEquipStack();
+    }
+
+    private void applyFormStatsAndAi(StudentForm f) {
+        this.isBrMode = (f == StudentForm.BR);
+
+        // ここで防御力/HP/ノックバック耐性などを上げたいなら後で加える
+        // まずはモデル切替＆WeaponSpec切替が動く土台を作る
+    }
+
+
+
+    public StudentForm getForm() {
+        int v = this.dataTracker.get(FORM_ID);
+        return (v == 1) ? StudentForm.BR : StudentForm.NORMAL;
+    }
+
+    public void setForm(StudentForm f) {
+        this.dataTracker.set(FORM_ID, (f == StudentForm.BR) ? 1 : 0);
+    }
 
 
 

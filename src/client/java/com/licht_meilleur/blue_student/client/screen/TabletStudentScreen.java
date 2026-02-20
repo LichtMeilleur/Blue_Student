@@ -54,6 +54,10 @@ public class TabletStudentScreen extends Screen {
     private static final int WEAPON_X = 48;
     private static final int WEAPON_Y = 200;
 
+    // 例：装備枠の背景
+    private static final int EQUIP_SLOT_X = 150;
+    private static final int EQUIP_SLOT_Y = 90;
+
     public TabletStudentScreen(BlockPos tabletPos, StudentId sid) {
         super(Text.empty());
         this.tabletPos = tabletPos;
@@ -126,6 +130,10 @@ public class TabletStudentScreen extends Screen {
 
         drawScaledText(ctx, "Weapon", x0 + 48, y0 + 190, 0x101010, 1.0f);
         ctx.drawText(textRenderer, sid.getWeaponText(), x0 + WEAPON_X, y0 + WEAPON_Y, 0x1A1A1A, false);
+
+
+        Identifier equipSlotTex = com.licht_meilleur.blue_student.student.StudentEquipments.getBrSlotTexture(sid);
+        ctx.drawTexture(equipSlotTex, x0 + EQUIP_SLOT_X, y0 + EQUIP_SLOT_Y, 0, 0, 36, 36, 36, 36);
 
         super.render(ctx, mouseX, mouseY, delta);
     }

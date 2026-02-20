@@ -61,4 +61,13 @@ public enum StudentId implements StringIdentifiable {
         }
         return SHIROKO;
     }
+
+    // StudentId.java に追加
+    public boolean hasBrForm() {
+        return switch (this) {
+            case HOSHINO -> true;
+            case ALICE -> false; // まだなら false
+            default -> false;
+        };
+    }
 }

@@ -37,6 +37,6 @@ public class ModScreenHandlers {
         if (raw instanceof IStudentEntity se) e = se;
 
         // クライアント側は “ダミー9スロ” でOK
-        return new StudentScreenHandler(syncId, inv, e, new SimpleInventory(9));
+        return new StudentScreenHandler(syncId, inv, e, new SimpleInventory(9), new SimpleInventory(1));
     }
 }

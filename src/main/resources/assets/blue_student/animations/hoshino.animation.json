@@ -99,14 +99,6 @@
 						}
 					}
 				},
-				"Shield": {
-					"rotation": {
-						"vector": [0, 0, -180]
-					},
-					"position": {
-						"vector": [0, -8, 0]
-					}
-				},
 				"Down": {
 					"position": {
 						"vector": [1, 0, 0]
@@ -633,26 +625,26 @@
 				},
 				"Shield": {
 					"rotation": {
-						"vector": [90.31509, 0.15539, 157.52499]
+						"vector": [86.82796, 82.16389, 331.32221]
 					},
 					"position": {
-						"vector": [-0.7, -2.3, -5.9]
+						"vector": [-0.7, 3.7, -7.1]
 					}
 				},
 				"UP": {
 					"rotation": {
-						"vector": [0, 0, 182.5]
+						"vector": [0, 0, 177.5]
 					},
 					"position": {
-						"vector": [3.4, 0, 0]
+						"vector": [0, 0, 0]
 					}
 				},
 				"Down": {
 					"rotation": {
-						"vector": [0, 0, -175]
+						"vector": [0, 0, -179]
 					},
 					"position": {
-						"vector": [-2.2, 0, 0]
+						"vector": [0.2, -0.3, 0]
 					}
 				},
 				"LeftLeg": {
@@ -773,7 +765,7 @@
 				},
 				"Shield": {
 					"position": {
-						"vector": [5.3, -13, 0]
+						"vector": [6.3, -13, 0]
 					}
 				},
 				"Halo": {
@@ -1669,34 +1661,28 @@
 				},
 				"Shield": {
 					"rotation": {
-						"vector": [90.32743, 0.12733, 162.52492]
+						"vector": [78.29385, 96.19636, -22.57064]
 					},
 					"position": {
 						"0.0": {
-							"vector": [-1, -3, -5.9]
+							"vector": [-1, 3, -7.2]
 						},
 						"0.3": {
-							"vector": [-1, -2, -5.9]
+							"vector": [-1, 3, -7.6]
 						},
 						"0.6": {
-							"vector": [-1, -3, -5.9]
+							"vector": [-1, 3, -7.2]
 						}
 					}
 				},
 				"UP": {
 					"rotation": {
-						"vector": [0, 0, 182.5]
-					},
-					"position": {
-						"vector": [3.4, 0, 0]
+						"vector": [0, 0, 177.5]
 					}
 				},
 				"Down": {
 					"rotation": {
 						"vector": [0, 0, -175]
-					},
-					"position": {
-						"vector": [-2.2, 0, 0]
 					}
 				},
 				"UpperBody": {
@@ -1788,31 +1774,25 @@
 				},
 				"LeftForeArm": {
 					"rotation": {
-						"vector": [-57.99794, 19.3546, 11.70092]
+						"vector": [-30.49794, 19.3546, 11.70092]
 					}
 				},
 				"Shield": {
 					"rotation": {
-						"vector": [90.0835, 0.34125, 107.52481]
+						"vector": [86.13087, 89.57668, -57.31874]
 					},
 					"position": {
-						"vector": [0.9, -1.4, -5.9]
+						"vector": [-3, 1.6, -7]
 					}
 				},
 				"UP": {
 					"rotation": {
 						"vector": [0, 0, 182.5]
-					},
-					"position": {
-						"vector": [3.4, 0, 0]
 					}
 				},
 				"Down": {
 					"rotation": {
 						"vector": [0, 0, -175]
-					},
-					"position": {
-						"vector": [-2.2, 0, 0]
 					}
 				},
 				"RightForeArm": {
