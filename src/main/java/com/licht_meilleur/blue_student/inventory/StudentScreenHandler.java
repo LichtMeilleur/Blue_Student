@@ -138,4 +138,6 @@ public class StudentScreenHandler extends ScreenHandler {
     public int getEquipSlotIndex() {
         return equipSlotScreenIndex;
     }
+
+
 }

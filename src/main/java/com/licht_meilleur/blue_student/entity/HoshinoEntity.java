@@ -1,8 +1,10 @@
 package com.licht_meilleur.blue_student.entity;
 
+import com.licht_meilleur.blue_student.ai.br_ai.*;
 import com.licht_meilleur.blue_student.ai.*;
 import com.licht_meilleur.blue_student.bed.BedLinkManager;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
+import com.licht_meilleur.blue_student.student.StudentBrAction;
 import com.licht_meilleur.blue_student.student.StudentId;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ai.goal.EscapeDangerGoal;
@@ -30,12 +32,38 @@ public class HoshinoEntity extends AbstractStudentEntity {
             DataTracker.registerData(HoshinoEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
     public static final String ANIM_GUARD_IDLE = "animation.model.guard_idle";
-    public static final String ANIM_GUARD_WALK = "animation.model.guard_walk";
+    public static final String ANIM_GUARD_WALK = "animation.model.guard_walk";//BRverでは使わない
     public static final String ANIM_GUARD_SHOT = "animation.model.guard_shot";
+
+    //BRver
+    //バックステップしながらショットガンを撃つ　4tickで射撃
+    public static final String ANIM_DODGE_SHOT = "animation.model.dodge_shot";
+    //盾でタックル　強吹き飛ばし
+    public static final String ANIM_GUARD_TACKLE = "animation.model.guard_tackle";
+    //その場で盾でバッシュ　強吹き飛ばし
+    public static final String ANIM_GUARD_BASH = "animation.model.guard_bash";
+    //リロードしながら撃つアニメ　メインのショットガンのリロードを行いながらサブのハンドガンをうつ　静止
+    public static final String ANIM_SUB_RELOAD_SHOT = "animation.model.sub_reload_shot";
+    //リロード無しで撃つアニメ　サブのハンドガンの静止して撃つ
+    public static final String ANIM_SUB_SHOT = "animation.model.sub_shot";
+    //側面にに回りながら撃つアニメ　前進しながら右方向or左方向に撃つイメージ　　2tickで射撃 体の向きは回避方向に向ける必要あり
+    public static final String ANIM_RIGHT_SIDE_SUB_SHOT = "animation.model.right_side_sub_shot";
+    public static final String ANIM_LEFT_SIDE_SUB_SHOT= "animation.model.left_side_sub_shot";
+
 
     private static final RawAnimation GUARD_IDLE = RawAnimation.begin().thenLoop(ANIM_GUARD_IDLE);
     private static final RawAnimation GUARD_WALK = RawAnimation.begin().thenLoop(ANIM_GUARD_WALK);
     private static final RawAnimation GUARD_SHOT = RawAnimation.begin().thenPlay(ANIM_GUARD_SHOT);
+
+    //BRver
+    private static final RawAnimation DODGE_SHOT = RawAnimation.begin().thenPlay(ANIM_DODGE_SHOT);
+    private static final RawAnimation GUARD_TACKLE = RawAnimation.begin().thenPlay(ANIM_GUARD_TACKLE);
+    private static final RawAnimation GUARD_BASH = RawAnimation.begin().thenPlay(ANIM_GUARD_BASH);
+    private static final RawAnimation SUB_RELOAD_SHOT = RawAnimation.begin().thenPlay(ANIM_SUB_RELOAD_SHOT);
+    private static final RawAnimation SUB_SHOT = RawAnimation.begin().thenPlay(ANIM_SUB_SHOT);
+    private static final RawAnimation RIGHT_SIDE_SUB_SHOT = RawAnimation.begin().thenPlay(ANIM_RIGHT_SIDE_SUB_SHOT);
+    private static final RawAnimation LEFT_SIDE_SUB_SHOT = RawAnimation.begin().thenPlay(ANIM_LEFT_SIDE_SUB_SHOT);
+
 
     // ===== Guard Skill Params =====
     private static final int GUARD_DURATION_TICKS = 60;   // 3秒（20t=1秒）
@@ -71,6 +99,23 @@ public class HoshinoEntity extends AbstractStudentEntity {
         super(type, world);
     }
 
+
+
+    @Override
+    protected RawAnimation getBrAnimationForAction(StudentBrAction a) {
+        return switch (a) {
+            case DODGE_SHOT          -> DODGE_SHOT;
+            case GUARD_TACKLE        -> GUARD_TACKLE;
+            case GUARD_BASH          -> GUARD_BASH;
+            case SUB_RELOAD_SHOT     -> SUB_RELOAD_SHOT;
+            case SUB_SHOT            -> SUB_SHOT;
+            case RIGHT_SIDE_SUB_SHOT -> RIGHT_SIDE_SUB_SHOT;
+            case LEFT_SIDE_SUB_SHOT  -> LEFT_SIDE_SUB_SHOT;
+            default -> null;
+        };
+    }
+
+
     @Override
     public StudentId getStudentId() { return StudentId.HOSHINO; }
 
@@ -93,31 +138,33 @@ public class HoshinoEntity extends AbstractStudentEntity {
         return super.interactMob(player, hand);
     }
 
+    @Override
     protected void initGoals() {
         this.goalSelector.add(0, new StudentRideWithOwnerGoal(this, this));
         this.goalSelector.add(1, new SwimGoal(this));
 
-        // ★Aim（向き＋射撃）: LOOK担当
+        // 共通LOOK（回避中はAim側が触らない実装になってる前提）
         this.goalSelector.add(2, new StudentAimGoal(this, this));
 
-        this.goalSelector.add(3, new HoshinoGuardGoal(this, this));
-        // 詰まり脱出（MOVE）
-        this.goalSelector.add(4, new StudentStuckEscapeGoal(this, this));
+        // ===== MOVE：フォーム別 =====
+        // BR回避（BRのみ動く）
+        this.goalSelector.add(3, new HoshinoBrEvadeGoal(this, this));
 
-        // 回避（MOVE） ※Combatより上
+        this.goalSelector.add(4, new HoshinoGuardGoal(this, this));
+
+        // Normal回避（Normalのみ動く）
         this.goalSelector.add(5, new StudentEvadeGoal(this, this));
 
-        // 危険回避（バニラ） ※必要ならここ（ただし強すぎるなら外す）
-        this.goalSelector.add(6, new EscapeDangerGoal(this, 1.25));
+        // 詰まり脱出（共通）
+        this.goalSelector.add(6, new StudentStuckEscapeGoal(this, this));
 
-        this.goalSelector.add(7, new StudentReturnToOwnerGoal(this, this, 1.35, 28.0, 2.5, 48.0, 20));
+        // BR戦闘（BRのみ）
+        this.goalSelector.add(7, new HoshinoBrCombatGoal(this, this));
 
-        // 角詰まり用（強いので優先度低め推奨）
-        this.goalSelector.add(8, new net.minecraft.entity.ai.goal.FleeEntityGoal<>(this, HostileEntity.class, 8.0f, 1.0, 1.35));
+        // Normal戦闘（Normalのみ）
+        this.goalSelector.add(8, new StudentCombatGoal(this, this));
 
-        // 戦闘（MOVE + 射撃キュー）
-        this.goalSelector.add(9, new StudentCombatGoal(this, this));
-
+        // 以降、Follow/Security/Eatなど共通
         this.goalSelector.add(10, new StudentFollowGoal(this, this, 1.1));
         this.goalSelector.add(11, new StudentSecurityGoal(this, this,
                 new StudentSecurityGoal.ISecurityPosProvider() {
@@ -131,6 +178,8 @@ public class HoshinoEntity extends AbstractStudentEntity {
     @Override
     public void tick() {
         super.tick();
+
+
 
         if (!this.getWorld().isClient && this.getWorld() instanceof ServerWorld sw) {
             tickGuardSkill(sw);
@@ -266,7 +315,12 @@ public class HoshinoEntity extends AbstractStudentEntity {
     // ===== アニメ差し替え =====
     @Override
     protected RawAnimation getOverrideAnimationIfAny() {
+
+
+
+        // ===== 2. 通常ガード処理（そのまま残す） =====
         if (!isGuarding()) return null;
+
         if (isGuardShooting()) return GUARD_SHOT;
 
         boolean moving = this.getVelocity().horizontalLengthSquared() > 0.002;

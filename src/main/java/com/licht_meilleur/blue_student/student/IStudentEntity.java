@@ -67,5 +67,17 @@ public interface IStudentEntity {
 
 
 
+    // サブ射撃（sub_muzzle）用
+    void queueFireSub(net.minecraft.entity.LivingEntity target);
+    boolean hasQueuedFireSub();
+    net.minecraft.entity.LivingEntity consumeQueuedFireSubTarget();
+
+    // AimGoalが「今の射撃はサブか」を知る用（任意だが便利）
+    boolean consumeQueuedFireIsSub();
+
+    void requestBrAction(com.licht_meilleur.blue_student.student.StudentBrAction action, int holdTicks);
+
+
+
 }
 

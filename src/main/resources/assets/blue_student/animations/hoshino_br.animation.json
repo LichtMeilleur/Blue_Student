@@ -905,6 +905,14 @@
 					"position": {
 						"vector": [0, 0, 0.8]
 					}
+				},
+				"sub_gun_hand": {
+					"position": {
+						"vector": [0, 1, 2]
+					},
+					"scale": {
+						"vector": [0.1, 0.1, 1]
+					}
 				}
 			}
 		},
@@ -1046,8 +1054,8 @@
 				}
 			}
 		},
-		"animation.model.dodge": {
-			"animation_length": 0.25,
+		"animation.model.dodge_shot": {
+			"animation_length": 0.3333,
 			"bones": {
 				"MAllBody": {
 					"rotation": {
@@ -1494,6 +1502,11 @@
 					},
 					"scale": {
 						"vector": [1.4, 1, 1.15]
+					}
+				},
+				"BackSkirt": {
+					"position": {
+						"vector": [0, 0, -0.7]
 					}
 				},
 				"Gun": {

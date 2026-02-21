@@ -3,6 +3,7 @@ package com.licht_meilleur.blue_student.client.student_model;
 import com.licht_meilleur.blue_student.BlueStudentMod;
 import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
 import com.licht_meilleur.blue_student.entity.HoshinoEntity;
+import com.licht_meilleur.blue_student.student.StudentForm;
 import net.minecraft.util.Identifier;
 import software.bernie.geckolib.constant.DataTickets;
 import software.bernie.geckolib.core.animatable.model.CoreGeoBone;
@@ -14,7 +15,7 @@ public class HoshinoModel extends GeoModel<HoshinoEntity> {
 
     @Override
     public Identifier getModelResource(HoshinoEntity animatable) {
-        if (animatable.getForm() == AbstractStudentEntity.StudentForm.BR) {
+        if (animatable.getForm() == StudentForm.BR) {
             return BlueStudentMod.id("geo/hoshino_br.geo.json");
         }
         return BlueStudentMod.id("geo/hoshino.geo.json");
@@ -22,7 +23,7 @@ public class HoshinoModel extends GeoModel<HoshinoEntity> {
 
     @Override
     public Identifier getTextureResource(HoshinoEntity animatable) {
-        if (animatable.getForm() == AbstractStudentEntity.StudentForm.BR) {
+        if (animatable.getForm() == StudentForm.BR) {
             return BlueStudentMod.id("textures/entity/hoshino_br.png");
         }
         return BlueStudentMod.id("textures/entity/hoshino.png");
@@ -30,7 +31,7 @@ public class HoshinoModel extends GeoModel<HoshinoEntity> {
 
     @Override
     public Identifier getAnimationResource(HoshinoEntity animatable) {
-        if (animatable.getForm() == AbstractStudentEntity.StudentForm.BR) {
+        if (animatable.getForm() == StudentForm.BR) {
             return BlueStudentMod.id("animations/hoshino_br.animation.json");
         }
         return BlueStudentMod.id("animations/hoshino.animation.json");

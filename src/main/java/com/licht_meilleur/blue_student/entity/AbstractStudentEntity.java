@@ -8,6 +8,7 @@ import com.licht_meilleur.blue_student.inventory.StudentInventory;
 import com.licht_meilleur.blue_student.inventory.StudentScreenHandler;
 import com.licht_meilleur.blue_student.skill.SkillRegistry;
 import com.licht_meilleur.blue_student.state.StudentWorldState;
+import com.licht_meilleur.blue_student.student.StudentForm;
 import com.licht_meilleur.blue_student.student.*;
 import com.licht_meilleur.blue_student.weapon.WeaponSpec;
 import com.licht_meilleur.blue_student.weapon.WeaponSpecs;
@@ -46,10 +47,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.*;
 import net.minecraft.world.TeleportTarget;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
@@ -121,6 +119,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     private static final RawAnimation JUMP   = RawAnimation.begin().thenPlay(ANIM_JUMP);
     private static final RawAnimation FALL   = RawAnimation.begin().thenLoop(ANIM_FALL);
     private static final RawAnimation ACTION = RawAnimation.begin().thenPlay(ANIM_ACTION);
+
 
     @Nullable
     protected RawAnimation getOverrideAnimationIfAny() { return null; }
@@ -241,13 +240,16 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
     private boolean isBrMode = false;
 
+    // Look policy (MOVE DIR)
+    private boolean lookMoveDir = false;
+    private int lookMoveDirPriority = 0;
+    private int lookMoveDirTicks = 0;
+
 
 
     // ===== Form (NORMAL / BR) =====
     private static final TrackedData<Integer> FORM_ID =
             DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
-
-    public enum StudentForm { NORMAL, BR }
 
 
 
@@ -489,6 +491,10 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             return;
         }
 
+
+        tickBrActionTimer();
+
+
         // ===== server：弾数初期化・ステータス適用 =====
         WeaponSpec spec = WeaponSpecs.forStudent(getStudentId());
         if (!ammoInitDone) {
@@ -572,6 +578,11 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
             }
         }
+
+        // ★LOOKポリシー適用（SIDE中は体Yawを移動方向へ）
+        tickLookPolicies();
+
+
         // ★ 現在位置を常に保存（5tickに1回で十分軽い）
         if (this.age % 5 == 0 && this.getWorld() instanceof ServerWorld sw) {
             StudentWorldState.get(sw)
@@ -989,13 +1000,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         }
     }
 
-    // ===== queue fire =====
-    @Override
-    public void queueFire(LivingEntity target) {
-        if (getWorld().isClient) return;
-        if (target == null) return;
-        queuedFireTargetUuid = target.getUuid();
-    }
+
 
     @Override
     public boolean hasQueuedFire() {
@@ -1082,6 +1087,19 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             state.getController().setAnimation(FALL);
             return PlayState.CONTINUE;
         }
+
+        if (getForm() == StudentForm.BR) {
+            var a = getBrAction();
+            if (a != com.licht_meilleur.blue_student.student.StudentBrAction.NONE) {
+                RawAnimation brAnim = getBrAnimationForAction(a);
+                if (brAnim != null) {
+                    state.getController().setAnimation(brAnim);
+                    return PlayState.CONTINUE;
+                }
+                // nullなら共通のSHOT/RELOAD等にフォールバック
+            }
+        }
+
 
         if (clientShotTicks > 0 || clientShotHoldTicks > 0) {
             if (shotJustStarted) {
@@ -1676,13 +1694,15 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     }
 
     @Override
-    public void requestLookMoveDir(int prio, int hold) {
-        if (!canOverrideLook(prio)) return;
-        lookReq.type = LookIntentType.MOVE_DIR;
-        lookReq.target = null;
-        lookReq.dir = null;
-        lookReq.priority = prio;
-        lookReq.holdTicks = hold;
+    public void requestLookMoveDir(int priority, int ticks) {
+        if (ticks <= 0) return;
+
+        // 既存のLookTarget/LookAway等と同じ優先度ルールに合わせる
+        if (!lookMoveDir || priority >= lookMoveDirPriority) {
+            this.lookMoveDir = true;
+            this.lookMoveDirPriority = priority;
+            this.lookMoveDirTicks = ticks;
+        }
     }
 
     @Override
@@ -1941,6 +1961,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                 + " alive=" + this.isAlive());
     }
 
+
     public void packAndDiscardForTransfer(ServerWorld currentWorld) {
         if (this.getWorld().isClient) return;
         if (packedForDimTransfer) return;
@@ -2066,6 +2087,7 @@ private void tickFormFromEquipment() {
 
 
     public StudentForm getForm() {
+        // FORM_ID を int で持ってるなら
         int v = this.dataTracker.get(FORM_ID);
         return (v == 1) ? StudentForm.BR : StudentForm.NORMAL;
     }
@@ -2073,6 +2095,140 @@ private void tickFormFromEquipment() {
     public void setForm(StudentForm f) {
         this.dataTracker.set(FORM_ID, (f == StudentForm.BR) ? 1 : 0);
     }
+
+
+
+
+    // ===== queue fire =====
+    // ===== queue fire =====
+    @Override
+    public void queueFire(LivingEntity target) {
+        if (getWorld().isClient) return;
+        if (target == null) return;
+        queuedFireTargetUuid = target.getUuid();
+        queuedFireIsSub = false;
+    }
+
+    // ===== queue fire (sub) =====
+    private java.util.UUID queuedFireSubTargetUuid = null;
+    private boolean queuedFireIsSub = false;
+
+    // ===== BR/サブ射撃キュー =====
+    private LivingEntity queuedFireTargetSub = null;
+
+
+
+    @Override
+    public void queueFireSub(LivingEntity target) {
+        if (getWorld().isClient) return;
+        if (target == null) return;
+        queuedFireSubTargetUuid = target.getUuid();
+        queuedFireIsSub = true;
+    }
+
+    @Override
+    public boolean hasQueuedFireSub() {
+        return queuedFireSubTargetUuid != null;
+    }
+
+    @Override
+    public LivingEntity consumeQueuedFireSubTarget() {
+        if (getWorld().isClient) return null;
+        if (!(getWorld() instanceof net.minecraft.server.world.ServerWorld sw)) return null;
+
+        if (queuedFireSubTargetUuid == null) return null;
+
+        var e = sw.getEntity(queuedFireSubTargetUuid);
+        queuedFireSubTargetUuid = null;
+        return (e instanceof LivingEntity le) ? le : null;
+    }
+
+    @Override
+    public boolean consumeQueuedFireIsSub() {
+        boolean v = queuedFireIsSub;
+        queuedFireIsSub = false;
+        return v;
+    }
+
+
+
+    private com.licht_meilleur.blue_student.student.StudentBrAction brAction = com.licht_meilleur.blue_student.student.StudentBrAction.NONE;
+    private int brActionTicks = 0;
+
+    @Override
+    public void requestBrAction(com.licht_meilleur.blue_student.student.StudentBrAction action, int holdTicks) {
+        this.brAction = action;
+        this.brActionTicks = Math.max(0, holdTicks);
+    }
+
+    // 毎tick減らす（AbstractStudentEntity.tick() か tickMovement() の最後あたりに）
+    private void tickBrActionTimer() {
+        if (brActionTicks > 0) brActionTicks--;
+        if (brActionTicks <= 0) brAction = com.licht_meilleur.blue_student.student.StudentBrAction.NONE;
+    }
+
+    // 参照用（アニメコントローラが読める）
+    public com.licht_meilleur.blue_student.student.StudentBrAction getBrAction() {
+        return brAction;
+    }
+
+    // ★サブクラスが「このBRアクションの時に再生するRawAnimation」を返す
+    @Nullable
+    protected RawAnimation getBrAnimationForAction(com.licht_meilleur.blue_student.student.StudentBrAction a) {
+        return null; // デフォルト：BRアニメ無し
+    }
+
+    public boolean shouldLockBodyYawToMoveDir() {
+        return lookMoveDir && lookMoveDirTicks > 0;
+    }
+
+    private void tickLookPolicies() {
+        if (lookMoveDirTicks > 0) lookMoveDirTicks--;
+        if (lookMoveDirTicks <= 0) lookMoveDir = false;
+
+        if (lookMoveDir) {
+            Vec3d v = this.getVelocity();
+            double vx = v.x;
+            double vz = v.z;
+
+            // ナビ移動直後で速度が小さいときは暴れやすいのでガード
+            if (vx * vx + vz * vz > 1.0e-4) {
+                float yaw = (float)(MathHelper.atan2(vz, vx) * (180.0 / Math.PI)) - 90.0f;
+
+                // 体を移動方向へ（headYawも揃える）
+                this.setYaw(yaw);
+                this.bodyYaw = yaw;
+                this.headYaw = yaw;
+            }
+        }
+    }
+    public void addAmmoInMag(int add, int magSize) {
+        this.ammoInMag = Math.min(magSize, this.ammoInMag + add);
+    }
+    // ========================================
+// 射撃時にナビを止めるかどうか
+// ========================================
+    public boolean shouldStopNavigationForShot(boolean fireIsSub) {
+
+        // フォーム取得
+        StudentForm form = getForm();
+
+        // ① BRフォーム
+        if (form == StudentForm.BR) {
+
+            // BRは基本「止まらない」
+            // ただしメイン射撃だけ止めたいならここで分岐可能
+            // 例：
+            // return !fireIsSub;
+
+            return false;
+        }
+
+        // ② 通常フォーム
+        // 通常は止める
+        return true;
+    }
+
 
 
 

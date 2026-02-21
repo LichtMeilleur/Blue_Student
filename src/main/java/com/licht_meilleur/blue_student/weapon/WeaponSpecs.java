@@ -5,167 +5,122 @@ import com.licht_meilleur.blue_student.student.StudentId;
 
 public class WeaponSpecs {
 
-    public static WeaponSpec forStudent(StudentId id) {
-        return switch (id) {
+    // =========================
+    // 既存（通常武器）を “定数” にする
+    // =========================
 
-            // シロコ：遠距離 標準AR想定
-            case SHIROKO -> WeaponSpec.projectile(
-                    16, // range
-                    2,// cooldownTicks
-                    1.2f, // damage
-                    3.0f,       // projectileSpeed
-                    0.04f, // spreadRad
-                    1,// pellets
-                    0.0f,   // ノックバック無し
-                    true,// bypassIFrames
-                    8.0,    // preferredMinRange
-                    14.0,    // preferredMaxRange
-                    30,             // magSize
-                    20,             // reloadTicks
-                    0,              // reloadStartAmmo
-                    5.0,    // panicRange
-                    false,          // infiniteAmmo
-                    WeaponSpec.FxType.BULLET,   // fxType
-                    1.0f,    // fxWidth
-                    6   //animationTicks
-            );
-
-            // ホシノ：近〜中距離 ショットガン想定（散弾）
-            case HOSHINO -> WeaponSpec.projectile(
-                    10,
-                    15,
-                    3.0f,
-                    2.0f,
-                    0.25f,
-                    8,
-                    0.8f,   // 強ノックバック
-                    true,
-                    3.0,    // preferredMinRange
-                    7.0,    // preferredMaxRange
-                    5,             // magSize
-                    43,             // reloadTicks
-                    0,              // reloadStartAmmo
-                    4.0,            // panicRange
-                    false,           // infiniteAmmo
-                    WeaponSpec.FxType.SHOTGUN,   // fxType
-                    3.0f,    // fxWidth
-                    12
-            );
-
-            // ヒナ：遠距離 高レート
-            case HINA -> WeaponSpec.projectile(
-                    16,
-                    2,
-                    1.2f,
-                    3.0f,
-                    0.04f,
-                    1,
-                    0.0f,   // ノックバック無し
-                    true,
-                    10.0,    // preferredMinRange
-                    16.0,    // preferredMaxRange
-                    100,             // magSize
-                    24,             // reloadTicks
-                    0,              // reloadStartAmmo
-                    5.0,
-                    false,           // infiniteAmmo
-                    WeaponSpec.FxType.BULLET,   // fxType
-                    1.0f,    // fxWidth
-                    6
-            );
-
-            // キサキ：中〜遠距離（命中寄り）
-            case KISAKI -> WeaponSpec.projectile(
-                    16,
-                    2,
-                    1.2f,
-                    3.0f,
-                    0.04f,
-                    1,
-                    0.0f,   // ノックバック無し
-                    true,
-                    5.0,    // preferredMinRange
-                    10.0,    // preferredMaxRange
-                    50,             // magSize
-                    37,             // reloadTicks
-                    0,              // reloadStartAmmo
-                    5.0,
-                    false,           // infiniteAmmo
-                    WeaponSpec.FxType.BULLET,   // fxType
-                    1.0f,    // fxWidth
-                    6
-            );
-
-            // アリス：遠距離 高ダメ（後でレールガンに変更しやすい）
-            case ALICE -> WeaponSpec.hitscan(
-                    40,
-                    20,
-                    18f,
-                    0f,     // projectileSpeedは使わない（hitscan）
-                    0f,
-                    1,
-                    1.5f,
-                    true,
-                    10.0,
-                    18.0,
-                    1,
-                    20,
-                    0,
-                    6.0,
-                    true,           // infiniteAmmo
-                    WeaponSpec.FxType.RAILGUN,   // fxType
-                    2.0f,    // fxWidth
-                    18
-            );
-        };
-
-
-
-    }
-
-
-    public static final WeaponSpec ALICE_HYPER = WeaponSpec.hitscan(
-            48,     // range
-            80,     // cooldownTicks
-            14f,    // damage
-            0f,     // projectileSpeed (未使用)
-            0f,     // spread
-            1,      // pellets
-            0f,     // knockback
-            true,   // bypassIFrames
-            0, 48,  // preferredMin/Max
-            1,      // mag
-            1,      // reload
-            0,
-            0,
-            true,   // infiniteAmmo
-            WeaponSpec.FxType.RAILGUN_HYPER,
-            1.0f,   // ★太さ（1ブロック）
-            20      // animation ticks
+    // シロコ：遠距離 標準AR想定
+    private static final WeaponSpec SHIROKO_MAIN = WeaponSpec.projectile(
+            16, 2, 1.2f, 3.0f, 0.04f, 1, 0.0f, true,
+            5.0, 14.0,
+            30, 20, 0, 3.5, false,
+            WeaponSpec.FxType.BULLET, 1.0f, 6
     );
 
+    // ホシノ：通常（ショットガン）
+    private static final WeaponSpec HOSHINO_MAIN = WeaponSpec.projectile(
+            10, 15, 3.0f, 2.0f, 0.25f, 8, 0.8f, true,
+            2.0, 8.0,
+            5, 43, 0, 1.5, false,
+            WeaponSpec.FxType.SHOTGUN, 3.0f, 12
+    );
 
-        public static WeaponSpec forStudent(StudentId id, StudentForm form, boolean sub) {
-            // sub==true ならサブ武器（sub_muzzle）用
-            // form==BR なら強化版
-            return forStudent(id);
-            /*return switch (id) {
-                case HOSHINO -> (form == StudentForm.BR)
-                        ? (sub ? HOSHINO_BR_SUB : HOSHINO_BR_MAIN)
-                        : (sub ? HOSHINO_SUB    : HOSHINO_MAIN);
-                case ALICE -> (sub ? ALICE_SUB : ALICE_MAIN); /*(form == StudentForm.BR)
-                        ? (sub ? ALICE_BR_SUB : ALICE_BR_MAIN)
-                        : (sub ? ALICE_SUB    : ALICE_MAIN);
-                default -> forStudent(id); // 既存のNORMALメインにfallback
-            };*/
-        }
+    // ヒナ：遠距離 高レート
+    private static final WeaponSpec HINA_MAIN = WeaponSpec.projectile(
+            16, 2, 1.2f, 3.0f, 0.04f, 1, 0.0f, true,
+            7.0, 16.0,
+            100, 24, 0, 3.5, false,
+            WeaponSpec.FxType.BULLET, 1.0f, 6
+    );
 
+    // キサキ：中〜遠距離（命中寄り）
+    private static final WeaponSpec KISAKI_MAIN = WeaponSpec.projectile(
+            16, 2, 1.2f, 3.0f, 0.04f, 1, 0.0f, true,
+            4.0, 10.0,
+            50, 37, 0, 3.5, false,
+            WeaponSpec.FxType.BULLET, 1.0f, 6
+    );
 
+    // アリス：通常（レールガン）
+    private static final WeaponSpec ALICE_MAIN = WeaponSpec.hitscan(
+            40, 20, 18f, 0f, 0f, 1, 1.5f, true,
+            8.0, 18.0,
+            1, 20, 0, 3.5, true,
+            WeaponSpec.FxType.RAILGUN, 2.0f, 18
+    );
 
+    // =========================
+    // 特殊（例：アリスHYPER）
+    // =========================
+    public static final WeaponSpec ALICE_HYPER = WeaponSpec.hitscan(
+            48, 80, 14f, 0f, 0f, 1, 0f, true,
+            0, 48,
+            1, 1, 0, 0, true,
+            WeaponSpec.FxType.RAILGUN_HYPER, 1.0f, 20
+    );
 
+    // =========================
+    // BR（ホシノ）
+    // =========================
+    private static final WeaponSpec HOSHINO_BR_MAIN = WeaponSpec.projectile(
+            12, 10, 3.5f, 2.2f, 0.22f, 8, 0.9f, true,
+            2.5, 8.0,
+            5, 35, 0, 4.0, false,
+            WeaponSpec.FxType.SHOTGUN, 3.0f, 12
+    );
 
+    // ★BRサブ（ハンドガン）※hitscanの引数は ALICE_MAIN と同じ並びで書く
+    private static final WeaponSpec HOSHINO_BR_SUB = WeaponSpec.hitscan(
+            16, 4, 1.4f,
+            0f, 0.04f,
+            1,
+            0.0f,
+            true,
+            1.5, 14.0,
+            15,
+            25,
+            0,
+            3.5,
+            false,
+            WeaponSpec.FxType.BULLET,
+            1.0f,
+            4
+    );
 
+    // =========================
+    // 既存API：通常フォーム用
+    // =========================
+    public static WeaponSpec forStudent(StudentId id) {
+        return switch (id) {
+            case SHIROKO -> SHIROKO_MAIN;
+            case HOSHINO -> HOSHINO_MAIN;
+            case HINA    -> HINA_MAIN;
+            case KISAKI  -> KISAKI_MAIN;
+            case ALICE   -> ALICE_MAIN;
+        };
+    }
+
+    // =========================
+    // 新API：フォーム＋サブ判定
+    // =========================
+    public static WeaponSpec forStudent(StudentId id, StudentForm form, boolean sub) {
+        return switch (id) {
+
+            case HOSHINO -> {
+                if (form == StudentForm.BR) {
+                    yield sub ? HOSHINO_BR_SUB : HOSHINO_BR_MAIN;
+                } else {
+                    // ★通常フォームはサブ射撃なし：sub無視
+                    yield HOSHINO_MAIN;
+                }
+            }
+
+            case ALICE -> {
+                // BR未実装ならここは一旦通常固定でもOK
+                yield ALICE_MAIN;
+            }
+
+            default -> forStudent(id);
+        };
+    }
 }
-
-
-

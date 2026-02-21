@@ -1,7 +1,9 @@
 package com.licht_meilleur.blue_student.ai;
 
+import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
 import com.licht_meilleur.blue_student.student.IStudentEntity;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
+import com.licht_meilleur.blue_student.student.StudentForm;
 import com.licht_meilleur.blue_student.weapon.*;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.LivingEntity;
@@ -52,8 +54,17 @@ public class StudentCombatGoal extends Goal {
         this.setControls(EnumSet.of(Control.MOVE));
     }
 
+    private boolean isBr() {
+        return (student instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity ase)
+                && ase.getForm() == com.licht_meilleur.blue_student.student.StudentForm.BR;
+    }
+
     @Override
     public boolean canStart() {
+
+        if (mob instanceof AbstractStudentEntity se && se.getForm() == StudentForm.BR) return false;
+        if (isBr()) return false; // ★BRはBR専用Goalに任せる
+
         if (!(mob.getWorld() instanceof ServerWorld)) return false;
 
         StudentAiMode mode = student.getAiMode();
@@ -72,6 +83,9 @@ public class StudentCombatGoal extends Goal {
 
     @Override
     public boolean shouldContinue() {
+
+        if (mob instanceof AbstractStudentEntity se && se.getForm() == StudentForm.BR) return false;
+        if (isBr()) return false;
         if (!(mob.getWorld() instanceof ServerWorld)) return false;
 
         StudentAiMode mode = student.getAiMode();
