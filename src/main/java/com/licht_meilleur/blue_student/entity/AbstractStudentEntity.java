@@ -168,7 +168,15 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     protected int reloadTicksLeft = 0;
     protected boolean ammoInitDone = false;
 
-    private UUID queuedFireTargetUuid = null;
+    // ===== queue fire =====
+    private UUID queuedFireTargetUuid = null;     // main
+    private UUID queuedFireSubTargetUuid = null;  // sub
+
+    // 直前に消費された種別（AimGoalが参照）
+    private boolean lastConsumedWasSub = false;
+
+
+
     private int lifeTimer;
 
     private BlockPos respawnBedFoot;
@@ -183,7 +191,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     private boolean evading = false;
 
     // ===== No-fall grace (common) =====
-    protected int noFallTicks = 0;
+    public int noFallTicks = 0;
     private boolean bs_wasOnGround = true;
 
 
@@ -247,11 +255,16 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
 
 
+
+
     // ===== Form (NORMAL / BR) =====
     private static final TrackedData<Integer> FORM_ID =
             DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
 
-
+    private static final TrackedData<Integer> BR_ACTION_ID =
+            DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
+    private static final TrackedData<Integer> BR_ACTION_HOLD =
+            DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
 
 
 
@@ -1002,22 +1015,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
 
 
-    @Override
-    public boolean hasQueuedFire() {
-        return queuedFireTargetUuid != null;
-    }
 
-    @Override
-    public LivingEntity consumeQueuedFireTarget() {
-        if (getWorld().isClient) return null;
-        if (queuedFireTargetUuid == null) return null;
-
-        var w = (ServerWorld) getWorld();
-        var e = w.getEntity(queuedFireTargetUuid);
-        queuedFireTargetUuid = null;
-
-        return (e instanceof LivingEntity le) ? le : null;
-    }
 
     // ===== GeckoLib controllers =====
     @Override
@@ -1059,13 +1057,28 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             return PlayState.CONTINUE;
         }
 
-        if (clientDodgeTicks > 0) {
-            if (dodgeJustStarted) {
-                state.getController().forceAnimationReset();
-                dodgeJustStarted = false;
+        // 先に BR action を最優先にする（すでにあなたが入れてる部分を “もっと上” に置くのが重要）
+        if (getForm() == StudentForm.BR) {
+            var a = getBrAction();
+            if (a != StudentBrAction.NONE) {
+                RawAnimation brAnim = getBrAnimationForAction(a);
+                if (brAnim != null) {
+                    state.getController().setAnimation(brAnim);
+                    return PlayState.CONTINUE;
+                }
             }
-            state.getController().setAnimation(DODGE);
-            return PlayState.CONTINUE;
+        }
+
+// BR中は旧dodgeトリガーを無視（ログも止まる）
+        if (clientDodgeTicks > 0) {
+            if (getForm() != StudentForm.BR) {
+                if (dodgeJustStarted) {
+                    state.getController().forceAnimationReset();
+                    dodgeJustStarted = false;
+                }
+                state.getController().setAnimation(DODGE);
+                return PlayState.CONTINUE;
+            }
         }
 
         if (this.hasVehicle()) {
@@ -1143,7 +1156,12 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         Vec3d up = new Vec3d(0, 1, 0);
         Vec3d right = look.crossProduct(up).normalize(); // 右方向ベクトル
 
-        Vec3d off = StudentId.fromKey(getStudentId().asString()).getMuzzleOffset();
+        Vec3d off;
+        if (this.getForm() == StudentForm.BR && this.getStudentId() == StudentId.HOSHINO) {
+            off = new Vec3d( /* BRホシノ用に調整した値 */ 0.60, -0.80, 1.00 );
+        } else {
+            off = StudentId.fromKey(getStudentId().asString()).getMuzzleOffset();
+        }
         // ※ getStudentId() が StudentId を返すなら fromKey いらない
 
         return eye
@@ -1152,7 +1170,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                 .add(right.multiply(off.z)); // 右
     }
 
-
+    //　マズル位置
     @Environment(EnvType.CLIENT)
     private Vec3d clientMuzzleWorldPos = null;
 
@@ -1162,6 +1180,17 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     @Environment(EnvType.CLIENT)
     public Vec3d getClientMuzzleWorldPosOrApprox() {
         return (clientMuzzleWorldPos != null) ? clientMuzzleWorldPos : getMuzzlePosApprox();
+    }
+
+    @Environment(EnvType.CLIENT)
+    private Vec3d clientSubMuzzleWorldPos = null;
+
+    @Environment(EnvType.CLIENT)
+    public void setClientSubMuzzleWorldPos(Vec3d pos) { this.clientSubMuzzleWorldPos = pos; }
+
+    @Environment(EnvType.CLIENT)
+    public Vec3d getClientSubMuzzleWorldPosOrApprox() {
+        return (clientSubMuzzleWorldPos != null) ? clientSubMuzzleWorldPos : getClientMuzzleWorldPosOrApprox();
     }
 
     // ===== movement tweak =====
@@ -1358,6 +1387,8 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         this.dataTracker.startTracking(RELOAD_TRIGGER, 0);
 
         this.dataTracker.startTracking(FORM_ID, 0);
+        this.dataTracker.startTracking(BR_ACTION_ID, com.licht_meilleur.blue_student.student.StudentBrAction.NONE.ordinal());
+        this.dataTracker.startTracking(BR_ACTION_HOLD, 0);
 
 
     }
@@ -2100,30 +2131,34 @@ private void tickFormFromEquipment() {
 
 
     // ===== queue fire =====
-    // ===== queue fire =====
+
+    private boolean queuedFireIsSub = false;
+
     @Override
     public void queueFire(LivingEntity target) {
         if (getWorld().isClient) return;
         if (target == null) return;
+
+        // 両立させない
+        queuedFireSubTargetUuid = null;
+
         queuedFireTargetUuid = target.getUuid();
-        queuedFireIsSub = false;
     }
-
-    // ===== queue fire (sub) =====
-    private java.util.UUID queuedFireSubTargetUuid = null;
-    private boolean queuedFireIsSub = false;
-
-    // ===== BR/サブ射撃キュー =====
-    private LivingEntity queuedFireTargetSub = null;
-
-
 
     @Override
     public void queueFireSub(LivingEntity target) {
         if (getWorld().isClient) return;
         if (target == null) return;
+
+        // 両立させない
+        queuedFireTargetUuid = null;
+
         queuedFireSubTargetUuid = target.getUuid();
-        queuedFireIsSub = true;
+    }
+
+    @Override
+    public boolean hasQueuedFire() {
+        return queuedFireTargetUuid != null;
     }
 
     @Override
@@ -2132,23 +2167,39 @@ private void tickFormFromEquipment() {
     }
 
     @Override
+    public LivingEntity consumeQueuedFireTarget() {
+        if (getWorld().isClient) return null;
+        if (!(getWorld() instanceof ServerWorld sw)) return null;
+        if (queuedFireTargetUuid == null) return null;
+
+        var e = sw.getEntity(queuedFireTargetUuid);
+
+        queuedFireTargetUuid = null;
+        lastConsumedWasSub = false;
+
+        return (e instanceof LivingEntity le) ? le : null;
+    }
+
+    @Override
     public LivingEntity consumeQueuedFireSubTarget() {
         if (getWorld().isClient) return null;
-        if (!(getWorld() instanceof net.minecraft.server.world.ServerWorld sw)) return null;
-
+        if (!(getWorld() instanceof ServerWorld sw)) return null;
         if (queuedFireSubTargetUuid == null) return null;
 
         var e = sw.getEntity(queuedFireSubTargetUuid);
+
         queuedFireSubTargetUuid = null;
+        lastConsumedWasSub = true;
+
         return (e instanceof LivingEntity le) ? le : null;
     }
 
     @Override
     public boolean consumeQueuedFireIsSub() {
-        boolean v = queuedFireIsSub;
-        queuedFireIsSub = false;
-        return v;
+        // 「直前の発射がsubか？」を返すだけ
+        return lastConsumedWasSub;
     }
+
 
 
 
@@ -2157,19 +2208,32 @@ private void tickFormFromEquipment() {
 
     @Override
     public void requestBrAction(com.licht_meilleur.blue_student.student.StudentBrAction action, int holdTicks) {
-        this.brAction = action;
-        this.brActionTicks = Math.max(0, holdTicks);
+        if (this.getWorld().isClient) return;
+
+        this.dataTracker.set(BR_ACTION_ID, action.ordinal());
+        this.dataTracker.set(BR_ACTION_HOLD, Math.max(0, holdTicks));
     }
 
     // 毎tick減らす（AbstractStudentEntity.tick() か tickMovement() の最後あたりに）
     private void tickBrActionTimer() {
-        if (brActionTicks > 0) brActionTicks--;
-        if (brActionTicks <= 0) brAction = com.licht_meilleur.blue_student.student.StudentBrAction.NONE;
+        if (this.getWorld().isClient) return;
+
+        int hold = this.dataTracker.get(BR_ACTION_HOLD);
+        if (hold > 0) {
+            hold--;
+            this.dataTracker.set(BR_ACTION_HOLD, hold);
+            if (hold <= 0) {
+                this.dataTracker.set(BR_ACTION_ID, com.licht_meilleur.blue_student.student.StudentBrAction.NONE.ordinal());
+            }
+        }
     }
 
     // 参照用（アニメコントローラが読める）
     public com.licht_meilleur.blue_student.student.StudentBrAction getBrAction() {
-        return brAction;
+        int id = this.dataTracker.get(BR_ACTION_ID);
+        var vals = com.licht_meilleur.blue_student.student.StudentBrAction.values();
+        if (id < 0 || id >= vals.length) return com.licht_meilleur.blue_student.student.StudentBrAction.NONE;
+        return vals[id];
     }
 
     // ★サブクラスが「このBRアクションの時に再生するRawAnimation」を返す

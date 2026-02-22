@@ -150,19 +150,19 @@ public class HoshinoEntity extends AbstractStudentEntity {
         // BR回避（BRのみ動く）
         this.goalSelector.add(3, new HoshinoBrEvadeGoal(this, this));
 
-        this.goalSelector.add(4, new HoshinoGuardGoal(this, this));
+        //this.goalSelector.add(4, new HoshinoGuardGoal(this, this));
 
         // Normal回避（Normalのみ動く）
-        this.goalSelector.add(5, new StudentEvadeGoal(this, this));
+        //this.goalSelector.add(5, new StudentEvadeGoal(this, this));
 
         // 詰まり脱出（共通）
-        this.goalSelector.add(6, new StudentStuckEscapeGoal(this, this));
+        //this.goalSelector.add(6, new StudentStuckEscapeGoal(this, this));
 
         // BR戦闘（BRのみ）
         this.goalSelector.add(7, new HoshinoBrCombatGoal(this, this));
 
         // Normal戦闘（Normalのみ）
-        this.goalSelector.add(8, new StudentCombatGoal(this, this));
+        //this.goalSelector.add(8, new StudentCombatGoal(this, this));
 
         // 以降、Follow/Security/Eatなど共通
         this.goalSelector.add(10, new StudentFollowGoal(this, this, 1.1));
@@ -192,6 +192,16 @@ public class HoshinoEntity extends AbstractStudentEntity {
 
     // ===== Guard Skill State Machine =====
     private void tickGuardSkill(ServerWorld sw) {
+
+        // ★BR中は通常ガードスキルを無効化（BR挙動と混ざるため）
+        if (getForm() == com.licht_meilleur.blue_student.student.StudentForm.BR) {
+            if (guarding) setGuardingInternal(false);
+            guardActiveTicks = 0;
+            guardCooldownTicks = 0;
+            return;
+        }
+
+
         // 復活ロック中は一切ガードしない
         if (this.isLifeLockedForGoal()) {
             if (guarding) setGuardingInternal(false);
@@ -315,10 +325,12 @@ public class HoshinoEntity extends AbstractStudentEntity {
     // ===== アニメ差し替え =====
     @Override
     protected RawAnimation getOverrideAnimationIfAny() {
+        // ★BR中は通常ガード演出を使わない（guard_walkログの根本原因）
+        if (getForm() == com.licht_meilleur.blue_student.student.StudentForm.BR) {
+            return null;
+        }
 
-
-
-        // ===== 2. 通常ガード処理（そのまま残す） =====
+        // ===== 通常フォームのガード処理 =====
         if (!isGuarding()) return null;
 
         if (isGuardShooting()) return GUARD_SHOT;

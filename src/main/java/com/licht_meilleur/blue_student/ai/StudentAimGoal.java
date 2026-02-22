@@ -70,29 +70,40 @@ public class StudentAimGoal extends Goal {
         }
 
         // =========================
-        // 2) 射撃キュー取得（sub優先）
-        // =========================
+// 2) 射撃キュー取得（sub優先）
+// =========================
         if (fireTarget == null) {
 
-            if (student.hasQueuedFireSub()) {
-                LivingEntity t = student.consumeQueuedFireSubTarget();
-                if (t != null && t.isAlive()) {
-                    fireTarget = t;
-                    fireIsSub = true;
-                    aimTicks = AIM_TICKS;
-                    stopNavigationIfNeeded();
-                }
+            // SUB優先
+            LivingEntity tSub = student.hasQueuedFireSub() ? student.consumeQueuedFireSubTarget() : null;
+            if (tSub != null && tSub.isAlive()) {
+                fireTarget = tSub;
+                fireIsSub = true;
+                aimTicks = AIM_TICKS;
+                stopNavigationIfNeeded();
             }
 
-            if (fireTarget == null && student.hasQueuedFire()) {
-                LivingEntity t = student.consumeQueuedFireTarget();
-                if (t != null && t.isAlive()) {
-                    fireTarget = t;
+            // MAIN（SUBが無ければ）
+            if (fireTarget == null) {
+                LivingEntity tMain = student.hasQueuedFire() ? student.consumeQueuedFireTarget() : null;
+                if (tMain != null && tMain.isAlive()) {
+                    fireTarget = tMain;
                     fireIsSub = false;
                     aimTicks = AIM_TICKS;
                     stopNavigationIfNeeded();
                 }
             }
+        }
+
+// ここで “この発射の spec” を確定
+        if (fireTarget != null) {
+            WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId(),
+                    student instanceof AbstractStudentEntity ase ? ase.getForm() : StudentForm.NORMAL,
+                    fireIsSub // ★ここが重要
+            );
+
+            // ↓この spec で射撃処理（hitscan / projectile / cooldown / ammo / muzzle）
+            // doFire(spec, fireTarget, fireIsSub);
         }
 
         // =========================
@@ -135,31 +146,37 @@ public class StudentAimGoal extends Goal {
             if (activeLook.holdTicks <= 0) activeLook = null;
         }
 
-        // =========================
-        // 5) 実射撃
-        // =========================
+        // 6) 実射撃
         if (fireTarget == null) return;
 
         aimTicks--;
         if (aimTicks > 0) return;
 
+// form確定
         StudentForm form = StudentForm.NORMAL;
         if (mob instanceof AbstractStudentEntity ase) {
             form = ase.getForm();
         }
 
-        WeaponSpec spec = WeaponSpecs.forStudent(
-                student.getStudentId(),
-                form,
-                fireIsSub
-        );
+// ★この発射の spec を確定（fireIsSub 以外を参照しない）
+        final boolean isSubShot = fireIsSub;
+        final WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId(), form, isSubShot);
 
+// 射程＆視界チェック
+        double dist = mob.distanceTo(fireTarget);
+        boolean canSee = mob.getVisibilityCache().canSee(fireTarget);
+        if (!canSee || dist > spec.range) {
+            fireTarget = null;
+            return;
+        }
+
+// 顔向け
         if (mob instanceof AbstractStudentEntity se) {
             se.faceTargetForShot(fireTarget, 35f, 25f);
         }
 
+// 発射
         boolean fired;
-
         if (spec.fxType == WeaponSpec.FxType.SHOTGUN) {
             fired = shotgunHitscanAction.shoot(student, fireTarget, spec);
         } else {

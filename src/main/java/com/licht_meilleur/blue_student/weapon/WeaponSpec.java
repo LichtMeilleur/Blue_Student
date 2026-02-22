@@ -7,6 +7,29 @@ public class WeaponSpec {
         HITSCAN
     }
 
+    public enum FxType {
+        BULLET,     // 普通の弾
+        SHOTGUN,    // 散弾
+        RAILGUN_HYPER,
+        RAILGUN     // 太ビーム
+    }
+
+    // ★追加：マズル種別（誤字防止）
+    public enum MuzzleLocator {
+        MUZZLE("muzzle"),
+        SUB_MUZZLE("sub_muzzle");
+
+        private final String boneName;
+
+        MuzzleLocator(String boneName) {
+            this.boneName = boneName;
+        }
+
+        public String boneName() {
+            return boneName;
+        }
+    }
+
     public final Type type;
 
     public final double range;
@@ -16,33 +39,25 @@ public class WeaponSpec {
     public final float spreadRad;
     public final int pellets;
 
-    // ★追加
     public final float knockback;
     public final boolean bypassIFrames;
 
-    /** ★距離管理（ここがショットガン等に重要） */
-    public final double preferredMinRange; // これより遠いなら詰める
-    public final double preferredMaxRange; // これより近いなら下がる
+    public final double preferredMinRange;
+    public final double preferredMaxRange;
 
-    // WeaponSpec に追加
-    public final int magSize;              // 例: 30, 100, 50, 5
-    public final int reloadTicks;          // リロードモーション継続(=撃てない時間)
-    public final int reloadStartAmmo;      // これ以下なら“安全なら”リロード開始（例: 0 or 5）
+    public final int magSize;
+    public final int reloadTicks;
+    public final int reloadStartAmmo;
     public final double panicRange;
     public final boolean infiniteAmmo;
 
-    public enum FxType {
-        BULLET,     // 普通の弾
-        SHOTGUN,    // 散弾
-        RAILGUN_HYPER,
-        RAILGUN     // 太ビーム
-    }
     public final FxType fxType;
     public final float fxWidth;
-    // レールガン太さ用（散弾/通常は0でOK）
 
     public final int animShotHoldTicks;
 
+    // ★追加：マズル指定
+    public final MuzzleLocator muzzleLocator;
 
     public WeaponSpec(
             Type type,
@@ -63,8 +78,8 @@ public class WeaponSpec {
             boolean infiniteAmmo,
             FxType fxType,
             float fxWidth,
-            int animShotHoldTicks
-
+            int animShotHoldTicks,
+            MuzzleLocator muzzleLocator
     ) {
         this.type = type;
         this.range = range;
@@ -73,19 +88,24 @@ public class WeaponSpec {
         this.projectileSpeed = projectileSpeed;
         this.spreadRad = spreadRad;
         this.pellets = pellets;
+
         this.knockback = knockback;
         this.bypassIFrames = bypassIFrames;
+
         this.preferredMinRange = preferredMinRange;
         this.preferredMaxRange = preferredMaxRange;
+
         this.magSize = magSize;
         this.reloadTicks = reloadTicks;
         this.reloadStartAmmo = reloadStartAmmo;
         this.panicRange = panicRange;
         this.infiniteAmmo = infiniteAmmo;
+
         this.fxType = fxType;
         this.fxWidth = fxWidth;
-        this.animShotHoldTicks = animShotHoldTicks;
 
+        this.animShotHoldTicks = animShotHoldTicks;
+        this.muzzleLocator = (muzzleLocator != null) ? muzzleLocator : MuzzleLocator.MUZZLE;
     }
 
     public static WeaponSpec projectile(
@@ -93,35 +113,46 @@ public class WeaponSpec {
             float projectileSpeed, float spreadRad, int pellets,
             float knockback, boolean bypassIFrames,
             double preferredMinRange, double preferredMaxRange,
-            int magSize,
-            int reloadTicks,
-            int reloadStartAmmo,
-            double panicRange,
-            boolean infiniteAmmo,
-            FxType fxType,
-            float fxWidth,
-            int animShotHoldTicks
+            int magSize, int reloadTicks, int reloadStartAmmo,
+            double panicRange, boolean infiniteAmmo,
+            FxType fxType, float fxWidth,
+            int animShotHoldTicks,
+            MuzzleLocator muzzleLocator
     ) {
-        return new WeaponSpec(Type.PROJECTILE, range, cooldownTicks, damage,
-                projectileSpeed, spreadRad, pellets, knockback, bypassIFrames,preferredMinRange,preferredMaxRange, magSize, reloadTicks, reloadStartAmmo, panicRange,infiniteAmmo,fxType,fxWidth, animShotHoldTicks);
+        return new WeaponSpec(
+                Type.PROJECTILE, range, cooldownTicks, damage,
+                projectileSpeed, spreadRad, pellets,
+                knockback, bypassIFrames,
+                preferredMinRange, preferredMaxRange,
+                magSize, reloadTicks, reloadStartAmmo,
+                panicRange, infiniteAmmo,
+                fxType, fxWidth,
+                animShotHoldTicks,
+                muzzleLocator
+        );
     }
+
     public static WeaponSpec hitscan(
             double range, int cooldownTicks, float damage,
             float projectileSpeed, float spreadRad, int pellets,
             float knockback, boolean bypassIFrames,
             double preferredMinRange, double preferredMaxRange,
-            int magSize,
-            int reloadTicks,
-            int reloadStartAmmo,
-            double panicRange,
-            boolean infiniteAmmo,
-            FxType fxType,
-            float fxWidth,
-            int animShotHoldTicks
+            int magSize, int reloadTicks, int reloadStartAmmo,
+            double panicRange, boolean infiniteAmmo,
+            FxType fxType, float fxWidth,
+            int animShotHoldTicks,
+            MuzzleLocator muzzleLocator
     ) {
-        return new WeaponSpec(Type.HITSCAN, range, cooldownTicks, damage,
-                projectileSpeed, spreadRad, pellets, knockback, bypassIFrames,preferredMinRange,preferredMaxRange, magSize, reloadTicks, reloadStartAmmo, panicRange,infiniteAmmo,fxType,fxWidth, animShotHoldTicks);
+        return new WeaponSpec(
+                Type.HITSCAN, range, cooldownTicks, damage,
+                projectileSpeed, spreadRad, pellets,
+                knockback, bypassIFrames,
+                preferredMinRange, preferredMaxRange,
+                magSize, reloadTicks, reloadStartAmmo,
+                panicRange, infiniteAmmo,
+                fxType, fxWidth,
+                animShotHoldTicks,
+                muzzleLocator
+        );
     }
-
-
 }

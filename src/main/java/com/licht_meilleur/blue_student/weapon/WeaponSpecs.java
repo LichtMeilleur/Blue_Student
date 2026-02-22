@@ -14,7 +14,7 @@ public class WeaponSpecs {
             16, 2, 1.2f, 3.0f, 0.04f, 1, 0.0f, true,
             5.0, 14.0,
             30, 20, 0, 3.5, false,
-            WeaponSpec.FxType.BULLET, 1.0f, 6
+            WeaponSpec.FxType.BULLET, 1.0f, 6,WeaponSpec.MuzzleLocator.MUZZLE
     );
 
     // ホシノ：通常（ショットガン）
@@ -22,7 +22,7 @@ public class WeaponSpecs {
             10, 15, 3.0f, 2.0f, 0.25f, 8, 0.8f, true,
             2.0, 8.0,
             5, 43, 0, 1.5, false,
-            WeaponSpec.FxType.SHOTGUN, 3.0f, 12
+            WeaponSpec.FxType.SHOTGUN, 3.0f, 12,WeaponSpec.MuzzleLocator.MUZZLE
     );
 
     // ヒナ：遠距離 高レート
@@ -30,7 +30,7 @@ public class WeaponSpecs {
             16, 2, 1.2f, 3.0f, 0.04f, 1, 0.0f, true,
             7.0, 16.0,
             100, 24, 0, 3.5, false,
-            WeaponSpec.FxType.BULLET, 1.0f, 6
+            WeaponSpec.FxType.BULLET, 1.0f, 6,WeaponSpec.MuzzleLocator.MUZZLE
     );
 
     // キサキ：中〜遠距離（命中寄り）
@@ -38,7 +38,7 @@ public class WeaponSpecs {
             16, 2, 1.2f, 3.0f, 0.04f, 1, 0.0f, true,
             4.0, 10.0,
             50, 37, 0, 3.5, false,
-            WeaponSpec.FxType.BULLET, 1.0f, 6
+            WeaponSpec.FxType.BULLET, 1.0f, 6,WeaponSpec.MuzzleLocator.MUZZLE
     );
 
     // アリス：通常（レールガン）
@@ -46,7 +46,7 @@ public class WeaponSpecs {
             40, 20, 18f, 0f, 0f, 1, 1.5f, true,
             8.0, 18.0,
             1, 20, 0, 3.5, true,
-            WeaponSpec.FxType.RAILGUN, 2.0f, 18
+            WeaponSpec.FxType.RAILGUN, 2.0f, 18,WeaponSpec.MuzzleLocator.MUZZLE
     );
 
     // =========================
@@ -56,7 +56,7 @@ public class WeaponSpecs {
             48, 80, 14f, 0f, 0f, 1, 0f, true,
             0, 48,
             1, 1, 0, 0, true,
-            WeaponSpec.FxType.RAILGUN_HYPER, 1.0f, 20
+            WeaponSpec.FxType.RAILGUN_HYPER, 1.0f, 20,   WeaponSpec.MuzzleLocator.MUZZLE
     );
 
     // =========================
@@ -66,7 +66,7 @@ public class WeaponSpecs {
             12, 10, 3.5f, 2.2f, 0.22f, 8, 0.9f, true,
             2.5, 8.0,
             5, 35, 0, 4.0, false,
-            WeaponSpec.FxType.SHOTGUN, 3.0f, 12
+            WeaponSpec.FxType.SHOTGUN, 3.0f, 12,WeaponSpec.MuzzleLocator.MUZZLE
     );
 
     // ★BRサブ（ハンドガン）※hitscanの引数は ALICE_MAIN と同じ並びで書く
@@ -81,10 +81,12 @@ public class WeaponSpecs {
             25,
             0,
             3.5,
-            false,
+            true,
             WeaponSpec.FxType.BULLET,
             1.0f,
-            4
+            4,
+            WeaponSpec.MuzzleLocator.SUB_MUZZLE
+
     );
 
     // =========================

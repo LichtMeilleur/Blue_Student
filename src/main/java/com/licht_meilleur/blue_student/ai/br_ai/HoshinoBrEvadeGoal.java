@@ -134,18 +134,6 @@ public class HoshinoBrEvadeGoal extends Goal {
             }
         }
 
-        // “回避しながら撃つ” を少しだけ入れる（BRホシノ想定）
-        // ※AimGoal側で sub_muzzle を撃たせたいなら queueFireSub に変える
-        if (dist < spec.range && mob.getVisibilityCache().canSee(threat)) {
-            firePulse++;
-            if (firePulse >= FIRE_PULSE_INTERVAL) {
-                firePulse = 0;
-
-                // ここを queueFireSub にすると「サブ拳銃」になる
-                // student.queueFireSub(threat);
-                student.queueFire(threat);
-            }
-        }
     }
 
     private LivingEntity findNearestHostile() {

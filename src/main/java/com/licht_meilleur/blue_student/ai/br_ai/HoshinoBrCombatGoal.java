@@ -33,11 +33,15 @@ public class HoshinoBrCombatGoal extends Goal {
     private static final double SIDE_SHOT_MIN = 3.0;
     private static final double SIDE_SHOT_MAX = 9.0;
 
+    // ★近距離の“ボス技”レンジ
+    private static final double TACKLE_RANGE = 2.2;   // これ以下ならタックル候補
+    private static final double BASH_RANGE   = 3.6;   // これ以下ならバッシュ候補
+
     // ===== 移動速度 =====
     private static final double STRAFE_SPEED = 1.25;
 
     // ===== リパス頻度（tryMoveAwayで使う）=====
-    private static final int REPATH_INTERVAL = 8;
+    private static final int REPATH_INTERVAL = 6;
     private int repathCooldown = 0;
 
     // ===== コマンド式アクション =====
@@ -45,12 +49,31 @@ public class HoshinoBrCombatGoal extends Goal {
     private int actionTicksLeft = 0;
     private boolean actionStarted = false;     // 開始tickだけ true
     private int actionAge = 0;                // 現アクション開始からの経過tick
+    private boolean actionHitDone = false;    // ★タックル/バッシュのヒット1回制御
 
     // actionごとのCD（ticks）
     private final int[] cds = new int[StudentBrAction.values().length];
 
     // SUB_RELOAD_SHOT 給弾用
     private int reloadStepCounter = 0;
+
+    // ===== SUB burst control =====
+    private int subBurstShots = 0;
+    private int subBurstCooldown = 0;
+
+    private static final int SUB_BURST_MAX = 3;        // 3発
+    private static final int SUB_BURST_CD_TICKS = 12;  // 0.6秒(好みで)
+
+    // ===== “まとまり”制御 =====
+    private int shotsLeftInAction = 0;    // このアクション中あと何回撃つか
+    private int fireTick = 0;             // 次の発射までのカウント
+    private StudentBrAction lastAction = StudentBrAction.NONE;
+    private int comboLockTicks = 0;       // “次候補縛り” の残り
+
+    // ★MAIN/SUBを一定時間固定して交互を消す
+    private enum WeaponMode { MAIN, SUB }
+    private WeaponMode mode = WeaponMode.MAIN;
+    private int modeLockTicks = 0;
 
     public HoshinoBrCombatGoal(PathAwareEntity mob, IStudentEntity student) {
         this.mob = mob;
@@ -98,6 +121,13 @@ public class HoshinoBrCombatGoal extends Goal {
         repathCooldown = 0;
         clearAllCds();
         stopAction();
+
+        subBurstShots = 0;
+        subBurstCooldown = 0;
+
+        mode = WeaponMode.MAIN;
+        modeLockTicks = 0;
+        comboLockTicks = 0;
     }
 
     @Override
@@ -106,6 +136,12 @@ public class HoshinoBrCombatGoal extends Goal {
         mob.setTarget(null);
         mob.getNavigation().stop();
         stopAction();
+
+        subBurstShots = 0;
+        subBurstCooldown = 0;
+
+        modeLockTicks = 0;
+        comboLockTicks = 0;
     }
 
     @Override
@@ -114,6 +150,9 @@ public class HoshinoBrCombatGoal extends Goal {
 
         tickCooldowns();
         if (repathCooldown > 0) repathCooldown--;
+        if (subBurstCooldown > 0) subBurstCooldown--;
+        if (modeLockTicks > 0) modeLockTicks--;
+        if (comboLockTicks > 0) comboLockTicks--;
 
         if (target == null || !target.isAlive()) {
             target = findTarget();
@@ -124,6 +163,12 @@ public class HoshinoBrCombatGoal extends Goal {
         }
 
         WeaponSpec mainSpec = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, false);
+
+        // ★reloadTicksLeft を減らす（BR中のreload管理）
+        if (student.isReloading()) {
+            student.tickReload(mainSpec);
+        }
+
         double dist = mob.distanceTo(target);
         boolean canSee = mob.getVisibilityCache().canSee(target);
 
@@ -145,48 +190,95 @@ public class HoshinoBrCombatGoal extends Goal {
 
         // ③ duration/cd をここで一括定義（好みで調整）
         switch (next) {
-            case DODGE_SHOT -> startAction(next, 8, 20);
-            case RIGHT_SIDE_SUB_SHOT, LEFT_SIDE_SUB_SHOT -> startAction(next, 6, 10);
-            case SUB_RELOAD_SHOT -> startAction(next, 8, 5);
-            case MAIN_SHOT -> startAction(next, 8, 10);
-            case SUB_SHOT -> startAction(next, 6, 0);
-            default -> startAction(StudentBrAction.SUB_SHOT, 6, 0);
+            case GUARD_TACKLE -> startAction(next, 10, 35); // 0.5秒 + CD
+            case GUARD_BASH   -> startAction(next, 10, 25);
+
+            case MAIN_SHOT -> startAction(next, 10, 6);
+            case SUB_SHOT  -> startAction(next, 10, 6);
+            case SUB_RELOAD_SHOT -> startAction(next, 14, 5);
+
+            case DODGE_SHOT -> startAction(next, 10, 20);
+            case RIGHT_SIDE_SUB_SHOT, LEFT_SIDE_SUB_SHOT -> startAction(next, 10, 10);
+
+            default -> startAction(StudentBrAction.SUB_SHOT, 10, 8);
         }
     }
 
     // ===== 次アクション選択 =====
     private StudentBrAction selectNextAction(WeaponSpec mainSpec, double dist, boolean canSee) {
 
-        // リロード中 → SUB_RELOAD_SHOT
-        if (student.isReloading()) return StudentBrAction.SUB_RELOAD_SHOT;
+        // ★「タックル/バッシュ後」は追撃ルートに寄せる（ボスっぽい）
+        // comboLockTicks は startAction/runAction 側で入れる
+        if (comboLockTicks > 0) {
+            mode = WeaponMode.SUB;
+            modeLockTicks = Math.max(modeLockTicks, 16);
+            if (!onCd(StudentBrAction.SUB_SHOT)) return StudentBrAction.SUB_SHOT;
+            return StudentBrAction.SUB_RELOAD_SHOT;
+        }
 
-        // メイン弾切れ → まずサブで粘る（距離近いならDODGE）
+        // ★リロード中/メイン弾切れはサブ寄り
+        if (student.isReloading()) {
+            mode = WeaponMode.SUB;
+            modeLockTicks = Math.max(modeLockTicks, 20);
+            return StudentBrAction.SUB_RELOAD_SHOT;
+        }
         if (!mainSpec.infiniteAmmo && student.getAmmoInMag() <= 0) {
+            mode = WeaponMode.SUB;
+            modeLockTicks = Math.max(modeLockTicks, 30);
             if (dist <= DODGE_SHOT_DIST && !onCd(StudentBrAction.DODGE_SHOT)) return StudentBrAction.DODGE_SHOT;
             return StudentBrAction.SUB_RELOAD_SHOT;
         }
 
-        // 近距離：DODGE（CD見てダメならMAIN or SUBへ）
+        // ★近距離：まずは“ボス技”優先（見えてる時だけ）
+        if (canSee) {
+            if (dist <= TACKLE_RANGE && !onCd(StudentBrAction.GUARD_TACKLE)) {
+                // タックル後は追撃サブに寄せたい
+                mode = WeaponMode.SUB;
+                modeLockTicks = Math.max(modeLockTicks, 20);
+                return StudentBrAction.GUARD_TACKLE;
+            }
+            if (dist <= BASH_RANGE && !onCd(StudentBrAction.GUARD_BASH)) {
+                mode = WeaponMode.SUB;
+                modeLockTicks = Math.max(modeLockTicks, 16);
+                return StudentBrAction.GUARD_BASH;
+            }
+        }
+
+        // 近距離：DODGE優先（これ中はSUB扱いに寄せる）
         if (dist <= DODGE_SHOT_DIST && !onCd(StudentBrAction.DODGE_SHOT)) {
+            mode = WeaponMode.SUB;
+            modeLockTicks = Math.max(modeLockTicks, 16);
             return StudentBrAction.DODGE_SHOT;
         }
 
-        // メイン通常射撃（距離が合って見えてる）
+        // SIDE（空いてる側）…これはSUB系なのでSUBに寄せて固定
+        if (canSee && dist >= SIDE_SHOT_MIN && dist <= SIDE_SHOT_MAX) {
+            StudentBrAction side = chooseSideAction();
+            if (side != StudentBrAction.NONE && !onCd(side)) {
+                mode = WeaponMode.SUB;
+                modeLockTicks = Math.max(modeLockTicks, 16);
+                return side;
+            }
+        }
+
+        // ★モード固定が残ってるなら、そのモードだけ返す（交互防止の本体）
+        if (modeLockTicks > 0) {
+            return (mode == WeaponMode.MAIN) ? StudentBrAction.MAIN_SHOT : StudentBrAction.SUB_SHOT;
+        }
+
+        // ★固定が切れたら：基本MAINを少し固定 → ダメならSUBを短く
         if (canSee && dist >= MAIN_SHOT_MIN && dist <= MAIN_SHOT_MAX && !onCd(StudentBrAction.MAIN_SHOT)) {
+            mode = WeaponMode.MAIN;
+            modeLockTicks = 20; // 1秒
             return StudentBrAction.MAIN_SHOT;
         }
 
-        // SIDE（空いてる側優先）
-        if (canSee && dist >= SIDE_SHOT_MIN && dist <= SIDE_SHOT_MAX) {
-            StudentBrAction side = chooseSideAction();
-            if (side != StudentBrAction.NONE && !onCd(side)) return side;
-        }
-
+        mode = WeaponMode.SUB;
+        modeLockTicks = 14; // 0.7秒
         return StudentBrAction.SUB_SHOT;
     }
 
     private StudentBrAction chooseSideAction() {
-        // 右/左の目標座標を作り、到達できる方を優先
         Vec3d rp = computeStrafePos(target, true, 5.0);
         Vec3d lp = computeStrafePos(target, false, 5.0);
 
@@ -196,10 +288,7 @@ public class HoshinoBrCombatGoal extends Goal {
         if (rOk && !lOk) return StudentBrAction.RIGHT_SIDE_SUB_SHOT;
         if (!rOk && lOk) return StudentBrAction.LEFT_SIDE_SUB_SHOT;
 
-        if (rOk) {
-            // 両方OKなら “いまは右優先” とかにしてもいい（ここは好み）
-            return StudentBrAction.RIGHT_SIDE_SUB_SHOT;
-        }
+        if (rOk) return StudentBrAction.RIGHT_SIDE_SUB_SHOT;
         return StudentBrAction.NONE;
     }
 
@@ -209,11 +298,26 @@ public class HoshinoBrCombatGoal extends Goal {
         actionTicksLeft = Math.max(1, duration);
         actionStarted = true;
         actionAge = 0;
+        actionHitDone = false;
 
-        // SUB_RELOAD_SHOT の給弾カウンタ
-        if (a == StudentBrAction.SUB_RELOAD_SHOT) reloadStepCounter = 0;
+        lastAction = a;
 
-        student.requestBrAction(a, duration);
+        // ★バースト数をアクションごとに固定
+        shotsLeftInAction = switch (a) {
+            case SUB_SHOT -> 3;
+            case RIGHT_SIDE_SUB_SHOT, LEFT_SIDE_SUB_SHOT -> 3;
+            case MAIN_SHOT -> 2;
+            case DODGE_SHOT -> 2;
+            case SUB_RELOAD_SHOT -> 3;
+
+            // 近接系は“射撃バースト無し”
+            case GUARD_TACKLE , GUARD_BASH -> 0;
+
+            default -> 0;
+        };
+        fireTick = 0;
+
+        student.requestBrAction(a, actionTicksLeft);
         if (cooldown > 0) setCd(a, cooldown);
     }
 
@@ -222,18 +326,25 @@ public class HoshinoBrCombatGoal extends Goal {
         actionTicksLeft = 0;
         actionStarted = false;
         actionAge = 0;
+        actionHitDone = false;
         reloadStepCounter = 0;
+        shotsLeftInAction = 0;
+        fireTick = 0;
     }
 
     // ===== アクション実行 =====
     private void runCurrentAction(WeaponSpec mainSpec, double dist, boolean canSee) {
         switch (current) {
+            case GUARD_TACKLE -> runTackle(canSee);
+            case GUARD_BASH   -> runBash(canSee);
+
             case DODGE_SHOT -> runDodgeShot(mainSpec, canSee);
             case RIGHT_SIDE_SUB_SHOT -> runSideSubShot(true, canSee);
             case LEFT_SIDE_SUB_SHOT -> runSideSubShot(false, canSee);
             case SUB_RELOAD_SHOT -> runSubReloadShot(mainSpec, dist, canSee);
             case SUB_SHOT -> runSubShot(canSee);
             case MAIN_SHOT -> runMainShot(canSee);
+
             default -> {
                 mob.getNavigation().stop();
                 student.requestLookTarget(target, 80, 2);
@@ -241,91 +352,167 @@ public class HoshinoBrCombatGoal extends Goal {
         }
     }
 
-    private void runDodgeShot(WeaponSpec mainSpec, boolean canSee) {
-        // 視線：敵（敵を見ながら後退撃ち）
-        student.requestLookTarget(target, 80, 2);
+    // ====== 近接：タックル / バッシュ ======
 
-        // 移動：後退
-        tryMoveAway(STRAFE_SPEED, 6.0);
+    private void runTackle(boolean canSee) {
+        student.requestLookTarget(target, 90, 2);
 
-        // 発射：interval=4tick（あなたのenum通り）
-        if (canSee && shouldFireThisTick(StudentBrAction.DODGE_SHOT)) {
-            student.queueFire(target); // メイン
+        if (actionStarted) {
+            Vec3d to = dirTowardTarget();
+            dash(to, 1.05, 0.06); // 強め突進
+        }
+
+        // ヒット判定：1回だけ
+        if (!actionHitDone && canSee && isTouchingTarget(1.0)) {
+            actionHitDone = true;
+
+            // ダメージ + 強ノックバック
+            float dmg = 5.0f;
+            target.damage(mob.getDamageSources().mobAttack(mob), dmg);
+
+            Vec3d dir = dirTowardTarget();
+            if (dir != null) {
+                // ノックバック：相手を“押し出す”ので逆向き
+                target.takeKnockback(1.2, -dir.x, -dir.z);
+            }
+
+            // ★追撃ルート：しばらくサブだけに絞る
+            comboLockTicks = 30;
+            mode = WeaponMode.SUB;
+            modeLockTicks = Math.max(modeLockTicks, 20);
         }
     }
 
-    private void runSideSubShot(boolean right, boolean canSee) {
-        // 体：移動方向（AimGoal側 lockBodyYawToMoveDir 前提）
+    private void runBash(boolean canSee) {
+        student.requestLookTarget(target, 90, 2);
+
+        if (actionStarted) {
+            Vec3d to = dirTowardTarget();
+            dash(to, 0.85, 0.04); // ちょい短め
+        }
+
+        if (!actionHitDone && canSee && isTouchingTarget(0.9)) {
+            actionHitDone = true;
+
+            float dmg = 3.5f;
+            target.damage(mob.getDamageSources().mobAttack(mob), dmg);
+
+            Vec3d dir = dirTowardTarget();
+            if (dir != null) {
+                target.takeKnockback(0.95, -dir.x, -dir.z);
+            }
+
+            comboLockTicks = 24;
+            mode = WeaponMode.SUB;
+            modeLockTicks = Math.max(modeLockTicks, 16);
+        }
+    }
+
+    private boolean isTouchingTarget(double expand) {
+        if (target == null) return false;
+        Box a = mob.getBoundingBox().expand(expand);
+        Box b = target.getBoundingBox();
+        return a.intersects(b);
+    }
+
+    private Vec3d dirTowardTarget() {
+        if (target == null) return null;
+        Vec3d d = target.getPos().subtract(mob.getPos());
+        d = new Vec3d(d.x, 0, d.z);
+        if (d.lengthSquared() < 1.0e-6) return null;
+        return d.normalize();
+    }
+
+    // ====== 既存射撃アクション ======
+
+    private void runDodgeShot(WeaponSpec mainSpec, boolean canSee) {
+        student.requestLookTarget(target, 80, 2);
+
+        if (actionStarted) {
+            Vec3d away = dirAwayFromTarget();
+            dash(away, 0.85, 0.06);
+        }
+
+        // ★バーストで同じ武器をまとめる（メイン2回）
+        tryBurstFire(false, StudentBrAction.DODGE_SHOT, canSee);
+    }
+
+    private void runSideSubShot(boolean rightSide, boolean canSee) {
         student.requestLookMoveDir(90, 2);
 
-        // 移動：右/左回り込み
-        Vec3d pos = computeStrafePos(target, right, 5.0);
-        if (pos != null) {
-            mob.getNavigation().startMovingTo(pos.x, pos.y, pos.z, STRAFE_SPEED);
+        if (actionStarted) {
+            Vec3d d = dirSideAroundTarget(rightSide);
+            dash(d, 0.75, 0.04);
+        } else {
+            mob.getNavigation().stop();
         }
 
-        // 発射：interval=2tick
-        if (canSee && shouldFireThisTick(right ? StudentBrAction.RIGHT_SIDE_SUB_SHOT : StudentBrAction.LEFT_SIDE_SUB_SHOT)) {
-            student.queueFireSub(target);
-        }
+        StudentBrAction a = rightSide ? StudentBrAction.RIGHT_SIDE_SUB_SHOT : StudentBrAction.LEFT_SIDE_SUB_SHOT;
+        tryBurstFire(true, a, canSee);
     }
 
     private void runSubShot(boolean canSee) {
         mob.getNavigation().stop();
         student.requestLookTarget(target, 80, 2);
 
-        if (canSee && shouldFireThisTick(StudentBrAction.SUB_SHOT)) {
-            student.queueFireSub(target);
-        }
+        tryBurstFire(true, StudentBrAction.SUB_SHOT, canSee);
     }
 
     private void runMainShot(boolean canSee) {
         mob.getNavigation().stop();
         student.requestLookTarget(target, 80, 2);
 
-        if (canSee && shouldFireThisTick(StudentBrAction.MAIN_SHOT)) {
-            student.queueFire(target);
-        }
+        tryBurstFire(false, StudentBrAction.MAIN_SHOT, canSee);
     }
 
     private void runSubReloadShot(WeaponSpec mainSpec, double dist, boolean canSee) {
-        // 視線：敵（静止しつつ牽制）
         student.requestLookTarget(target, 80, 2);
 
-        // 近すぎるときだけ離れる（安全確保）
+        // 移動：近すぎだけ離れる
         if (dist < Math.max(2.5, mainSpec.panicRange)) {
             tryMoveAway(STRAFE_SPEED, 6.0);
         } else {
             mob.getNavigation().stop();
         }
 
-        // サブ牽制：interval=2tick
-        if (canSee && shouldFireThisTick(StudentBrAction.SUB_RELOAD_SHOT)) {
-            student.queueFireSub(target);
-        }
+        // サブ牽制（3発まとめ）
+        tryBurstFire(true, StudentBrAction.SUB_RELOAD_SHOT, canSee);
 
-        // ★メイン給弾：reloadTicks と magSize から割り算で「間隔」を作る
-        // （1アクションで+1にしたいなら interval=actionTicksLeft とかにすればOK）
+        // 給弾（メイン +1 を一定間隔で）
         reloadStepCounter++;
         int interval = Math.max(1, mainSpec.reloadTicks / Math.max(1, mainSpec.magSize));
         if (reloadStepCounter % interval == 0) {
-            // あなたの実装に合わせて「メイン弾を+1」
             if (student instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity se) {
-                se.addAmmoInMag(1, mainSpec.magSize); // ★下でメソッド例
+                se.addAmmoInMag(1, mainSpec.magSize);
             }
-        }
-
-        // 本格リロード開始（弾切れで距離安全なら開始）
-        if (!mainSpec.infiniteAmmo && student.getAmmoInMag() <= 0 && !student.isReloading()) {
-            if (dist >= mainSpec.panicRange) student.startReload(mainSpec);
         }
     }
 
-    // ★「このtickで撃つべきか」：enumの fireIntervalTicks を使う（揃う）
-    private boolean shouldFireThisTick(StudentBrAction a) {
+    private boolean tryBurstFire(boolean sub, StudentBrAction a, boolean canSee) {
+        if (!canSee) return false;
+        if (shotsLeftInAction <= 0) return false;
+
+        // subバースト制限（暴発防止）
+        if (sub && !canFireSubNow()) return false;
+
         int interval = Math.max(1, a.fireIntervalTicks);
-        // actionAge は 0,1,2... なので、0から数えて interval ごとに撃つ
-        return (actionAge % interval) == 0;
+
+        if (fireTick > 0) {
+            fireTick--;
+            return false;
+        }
+
+        // 撃つ（キューは AbstractStudentEntity 側で相互消去してる前提）
+        if (sub) {
+            student.queueFireSub(target);
+            onFiredSub();
+        } else {
+            student.queueFire(target);
+        }
+
+        shotsLeftInAction--;
+        fireTick = interval - 1;
+        return true;
     }
 
     // ===== 移動ユーティリティ =====
@@ -364,12 +551,11 @@ public class HoshinoBrCombatGoal extends Goal {
         return fuzzy != null ? fuzzy : desired;
     }
 
-    // ===== パス到達可否 =====
     private boolean canReach(Vec3d pos) {
         if (pos == null) return false;
         var nav = mob.getNavigation();
         var path = nav.findPathTo(BlockPos.ofFloored(pos), 0);
-        return path != null; // まずはこれでOK（厳密にするなら reachesTarget 相当を追加）
+        return path != null;
     }
 
     // ===== CD管理 =====
@@ -384,11 +570,14 @@ public class HoshinoBrCombatGoal extends Goal {
     }
 
     private boolean onCd(StudentBrAction a) {
-        return cds[a.ordinal()] > 0;
+        int idx = a.ordinal();
+        return idx >= 0 && idx < cds.length && cds[idx] > 0;
     }
 
     private void setCd(StudentBrAction a, int cd) {
-        cds[a.ordinal()] = Math.max(cds[a.ordinal()], cd);
+        int idx = a.ordinal();
+        if (idx < 0 || idx >= cds.length) return;
+        cds[idx] = Math.max(cds[idx], cd);
     }
 
     // ===== ターゲット探索 =====
@@ -401,5 +590,65 @@ public class HoshinoBrCombatGoal extends Goal {
                 ).stream()
                 .min(Comparator.comparingDouble(mob::squaredDistanceTo))
                 .orElse(null);
+    }
+
+    private boolean canFireSubNow() {
+        return subBurstCooldown <= 0;
+    }
+
+    private void onFiredSub() {
+        subBurstShots++;
+        if (subBurstShots >= SUB_BURST_MAX) {
+            subBurstShots = 0;
+            subBurstCooldown = SUB_BURST_CD_TICKS;
+        }
+    }
+
+    // ===== Dash util =====
+    private void dash(Vec3d dir, double horizSpeed, double upSpeed) {
+        if (dir == null) return;
+
+        Vec3d d = new Vec3d(dir.x, 0, dir.z);
+        if (d.lengthSquared() < 1.0e-6) return;
+
+        d = d.normalize().multiply(horizSpeed);
+
+        mob.getNavigation().stop();
+        mob.setVelocity(d.x, upSpeed, d.z);
+        mob.velocityDirty = true;
+
+        if (mob instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity ase) {
+            ase.noFallTicks = Math.max(ase.noFallTicks, 12);
+        }
+    }
+
+    private Vec3d dirAwayFromTarget() {
+        Vec3d away = mob.getPos().subtract(target.getPos());
+        away = new Vec3d(away.x, 0, away.z);
+        if (away.lengthSquared() < 1.0e-6) return null;
+        return away.normalize();
+    }
+
+    /**
+     * ★side_shot左右が逆だったので反転版
+     * forward × up の符号を反転して “右” を逆にしている
+     */
+    private Vec3d dirSideAroundTarget(boolean rightSide) {
+        Vec3d forward = mob.getRotationVec(1.0f);
+        forward = new Vec3d(forward.x, 0, forward.z);
+        if (forward.lengthSquared() < 1.0e-6) return null;
+        forward = forward.normalize();
+
+        // ★ここを反転：右 = (z, 0, -x)
+        Vec3d right = new Vec3d(forward.z, 0, -forward.x);
+
+        Vec3d side = rightSide ? right : right.multiply(-1);
+
+        // 横 + ちょい前進（見た目がステップっぽい）
+        Vec3d toward = forward.multiply(0.15);
+        Vec3d out = side.add(toward);
+
+        if (out.lengthSquared() < 1.0e-6) return side.normalize();
+        return out.normalize();
     }
 }
