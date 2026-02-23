@@ -71,7 +71,7 @@ public class WeaponSpecs {
 
     // ★BRサブ（ハンドガン）※hitscanの引数は ALICE_MAIN と同じ並びで書く
     private static final WeaponSpec HOSHINO_BR_SUB = WeaponSpec.hitscan(
-            16, 4, 1.4f,
+            16, 2, 1.4f,
             0f, 0.04f,
             1,
             0.0f,
@@ -84,7 +84,7 @@ public class WeaponSpecs {
             true,
             WeaponSpec.FxType.BULLET,
             1.0f,
-            4,
+            2,
             WeaponSpec.MuzzleLocator.SUB_MUZZLE
 
     );

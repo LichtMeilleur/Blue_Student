@@ -4,6 +4,7 @@ import com.licht_meilleur.blue_student.ai.*;
 import com.licht_meilleur.blue_student.bed.BedLinkManager;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
 import com.licht_meilleur.blue_student.student.StudentId;
+import com.licht_meilleur.blue_student.student.IStudentEntity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ai.goal.EscapeDangerGoal;
 import net.minecraft.entity.ai.goal.SwimGoal;
@@ -17,6 +18,7 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraft.entity.LivingEntity;
 import software.bernie.geckolib.core.animation.RawAnimation;
 
 public class ShirokoEntity extends AbstractStudentEntity {
@@ -128,9 +130,13 @@ public class ShirokoEntity extends AbstractStudentEntity {
         this.dataTracker.set(DRONE_START_TRIGGER, this.dataTracker.get(DRONE_START_TRIGGER) + 1);
     }
     @Override
-    public void requestShot() {
-        super.requestShot();
-        this.dataTracker.set(SHOT_TRIGGER, this.dataTracker.get(SHOT_TRIGGER) + 1);
+    public void requestShot(IStudentEntity.ShotKind kind, LivingEntity target) {
+        // super 側は 1引数版しか無いので、そっちを呼ぶ
+        super.requestShot(kind);
+
+        // ここに ShirokoEntity 固有でやってた処理があるなら残す
+        // 例：ドローン同期など
+        // bumpShotTrigger(); など
     }
     public int getShotTrigger() {
         return this.dataTracker.get(SHOT_TRIGGER);

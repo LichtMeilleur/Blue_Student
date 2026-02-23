@@ -32,7 +32,7 @@ public class ShotgunHitscanWeaponAction implements WeaponAction {
 
 
         final Vec3d start = (shooterEntity instanceof AbstractStudentEntity se)
-                ? se.getMuzzlePosApprox()
+                ? se.getMuzzlePosFor(spec)
                 : shooterEntity.getEyePos();
 
         Random r = sw.getRandom();

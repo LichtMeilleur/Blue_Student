@@ -4,6 +4,7 @@ import com.licht_meilleur.blue_student.weapon.WeaponSpec;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.UUID;
 
@@ -52,10 +53,22 @@ public interface IStudentEntity {
 
 
 
+    enum ShotKind { MAIN, SUB, NONE }
+
+
+
+    // 互換用（任意）
+    default void requestShot() { requestShot(ShotKind.MAIN, null); }
+
 
     // ===== animation / presentation hooks =====
-    default void requestShot() {}
-    default void requestShot(LivingEntity target) { requestShot(); } // ★追加
+    default void requestShot(ShotKind kind) {
+        requestShot(kind, null);
+    }
+    default void requestShot(ShotKind kind, LivingEntity target) {
+        requestShot(kind);
+    }
+
     default void requestReload() {}
 
     default void requestDodge() {}
@@ -67,17 +80,21 @@ public interface IStudentEntity {
 
 
 
+
     // サブ射撃（sub_muzzle）用
     void queueFireSub(net.minecraft.entity.LivingEntity target);
     boolean hasQueuedFireSub();
     net.minecraft.entity.LivingEntity consumeQueuedFireSubTarget();
+
+
+
 
     // AimGoalが「今の射撃はサブか」を知る用（任意だが便利）
     boolean consumeQueuedFireIsSub();
 
     void requestBrAction(com.licht_meilleur.blue_student.student.StudentBrAction action, int holdTicks);
 
-
+    void requestLookDir(Vec3d dir, int yawSpeed, int pitchSpeed);
 
 
 }

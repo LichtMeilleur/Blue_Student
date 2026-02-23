@@ -49,6 +49,15 @@ public class StudentAimGoal extends Goal {
     @Override
     public void tick() {
 
+        if (mob.age % 20 == 0) {
+            System.out.println("[AIM] evading=" + student.isEvading()
+                    + " form=" + (mob instanceof AbstractStudentEntity ase ? ase.getForm() : "NA")
+                    + " brAction=" + (mob instanceof AbstractStudentEntity ase2 ? ase2.getBrActionServer() : "NA")
+                    + " target=" + (mob.getTarget() != null));
+        }
+
+
+
         // =========================
         // 0) 回避中は一切触らない
         // =========================
@@ -69,22 +78,35 @@ public class StudentAimGoal extends Goal {
             }
         }
 
-        // =========================
-// 2) 射撃キュー取得（sub優先）
+
+
+
+
+// =========================
+// 2) 射撃キュー取得（BRはdesiredのみ）
 // =========================
         if (fireTarget == null) {
 
-            // SUB優先
-            LivingEntity tSub = student.hasQueuedFireSub() ? student.consumeQueuedFireSubTarget() : null;
-            if (tSub != null && tSub.isAlive()) {
-                fireTarget = tSub;
-                fireIsSub = true;
-                aimTicks = AIM_TICKS;
-                stopNavigationIfNeeded();
-            }
+            boolean desiredIsSub = false;
 
-            // MAIN（SUBが無ければ）
-            if (fireTarget == null) {
+            if (mob instanceof AbstractStudentEntity ase && ase.getForm() == StudentForm.BR) {
+                StudentBrAction a = ase.getBrActionServer();
+                desiredIsSub = (a != null && a.shotKind == IStudentEntity.ShotKind.SUB);
+
+                // ★BRは「欲しい方だけ」取り出す（交互化を止める）
+                LivingEntity t = desiredIsSub
+                        ? (student.hasQueuedFireSub() ? student.consumeQueuedFireSubTarget() : null)
+                        : (student.hasQueuedFire()    ? student.consumeQueuedFireTarget()    : null);
+
+                if (t != null && t.isAlive()) {
+                    fireTarget = t;
+                    fireIsSub = desiredIsSub;
+                    aimTicks = AIM_TICKS;
+                    stopNavigationIfNeeded();
+                }
+
+            } else {
+                // ★BR以外は今まで通りでもOK（SUB優先が無いならMAINだけのはず）
                 LivingEntity tMain = student.hasQueuedFire() ? student.consumeQueuedFireTarget() : null;
                 if (tMain != null && tMain.isAlive()) {
                     fireTarget = tMain;
@@ -176,6 +198,7 @@ public class StudentAimGoal extends Goal {
         }
 
 // 発射
+
         boolean fired;
         if (spec.fxType == WeaponSpec.FxType.SHOTGUN) {
             fired = shotgunHitscanAction.shoot(student, fireTarget, spec);
@@ -186,8 +209,14 @@ public class StudentAimGoal extends Goal {
             };
         }
 
+
+
         if (fired) {
-            student.requestShot();
+
+            student.requestShot(
+                    isSubShot ? IStudentEntity.ShotKind.SUB : IStudentEntity.ShotKind.MAIN,
+                    fireTarget
+            );
             if (!spec.infiniteAmmo) student.consumeAmmo(1);
         }
 

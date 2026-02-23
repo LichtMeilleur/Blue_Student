@@ -41,6 +41,7 @@ public class StudentRenderer<T extends AbstractStudentEntity> extends GeoEntityR
                                   int packedOverlay,
                                   float red, float green, float blue, float alpha) {
 
+/*
         // 1) 旧方式：bone名が muzzle/sub_muzzle の場合（ボーン方式でも動く）
         if ("muzzle".equals(bone.getName())) {
             Vec3d w = worldPosFromCurrentMatrix(poseStack, 0, 0, 0);
@@ -50,6 +51,26 @@ public class StudentRenderer<T extends AbstractStudentEntity> extends GeoEntityR
             Vec3d w = worldPosFromCurrentMatrix(poseStack, 0, 0, 0);
             animatable.setClientSubMuzzleWorldPos(w);
         }
+
+*/
+
+         Vec3d lastLoggedSub = null;
+        int lastLogTick = 0;
+
+        if ("sub_muzzle".equals(bone.getName())) {
+            Vec3d w = worldPosFromCurrentMatrix(poseStack, 0, 0, 0);
+            animatable.setClientSubMuzzleWorldPos(w);
+
+            // 10tickに1回、かつ大きく動いた時だけログ
+            if (animatable.age - lastLogTick >= 10) {
+                if (lastLoggedSub == null || lastLoggedSub.squaredDistanceTo(w) > 0.01) {
+                    System.out.println("[MUZZLE] sub=" + w);
+                    lastLoggedSub = w;
+                    lastLogTick = animatable.age;
+                }
+            }
+        }
+
 
         // 2) 新方式：Bedrock geo の "locators" を拾う（BRがこれ）
         //    locator座標は「ピクセル単位」なので /16 してブロック単位にする
@@ -85,12 +106,7 @@ public class StudentRenderer<T extends AbstractStudentEntity> extends GeoEntityR
         Vector4f v = new Vector4f(lx, ly, lz, 1);
         v.mul(mat);
 
-        MinecraftClient mc = MinecraftClient.getInstance();
-        Vec3d cam = (mc.gameRenderer != null && mc.gameRenderer.getCamera() != null)
-                ? mc.gameRenderer.getCamera().getPos()
-                : Vec3d.ZERO;
-
-        return new Vec3d(v.x + cam.x, v.y + cam.y, v.z + cam.z);
+        return new Vec3d(v.x, v.y, v.z); // ← camera足さない
     }
 
     /**
@@ -98,38 +114,37 @@ public class StudentRenderer<T extends AbstractStudentEntity> extends GeoEntityR
      * 返り値は「ピクセル単位」の座標(Vec3d)想定（geoの値そのまま）
      */
     private Vec3d tryGetLocatorLocalPos(GeoBone bone, String locatorName) {
+        // 1) getLocators() があるなら最優先（存在確認できる）
         try {
-            // まず getLocatorPosition(String) を探す（存在する版がある）
-            Method m = bone.getClass().getMethod("getLocatorPosition", String.class);
-            Object r = m.invoke(bone, locatorName);
-            if (r != null) {
-                // 戻り型が Vector3f / Vec3d / 何か の可能性があるので雑に読む
-                double x = readFieldAsDouble(r, "x");
-                double y = readFieldAsDouble(r, "y");
-                double z = readFieldAsDouble(r, "z");
-                return new Vec3d(x, y, z);
-            }
-        } catch (NoSuchMethodException ignored) {
-            // 次の候補へ
-        } catch (Throwable ignored) {
-        }
-
-        try {
-            // 次に getLocators() を探す（Mapっぽいものを返す版がある）
             Method m = bone.getClass().getMethod("getLocators");
             Object map = m.invoke(bone);
             if (map instanceof java.util.Map<?, ?> mp) {
+                if (!mp.containsKey(locatorName)) return null; // ★これが肝
                 Object v = mp.get(locatorName);
-                if (v != null) {
-                    double x = readFieldAsDouble(v, "x");
-                    double y = readFieldAsDouble(v, "y");
-                    double z = readFieldAsDouble(v, "z");
-                    return new Vec3d(x, y, z);
-                }
+                if (v == null) return null;
+                return new Vec3d(
+                        readFieldAsDouble(v, "x"),
+                        readFieldAsDouble(v, "y"),
+                        readFieldAsDouble(v, "z")
+                );
             }
-        } catch (NoSuchMethodException ignored) {
-        } catch (Throwable ignored) {
-        }
+        } catch (Throwable ignored) {}
+
+        // 2) getLocatorPosition は最後（無いのに 0,0,0 を返す実装がある）
+        try {
+            Method m = bone.getClass().getMethod("getLocatorPosition", String.class);
+            Object r = m.invoke(bone, locatorName);
+            if (r == null) return null;
+
+            double x = readFieldAsDouble(r, "x");
+            double y = readFieldAsDouble(r, "y");
+            double z = readFieldAsDouble(r, "z");
+
+            // ★保険：完全ゼロは「無いのにゼロ返し」疑惑が強いので弾く
+            if (x == 0.0 && y == 0.0 && z == 0.0) return null;
+
+            return new Vec3d(x, y, z);
+        } catch (Throwable ignored) {}
 
         return null;
     }

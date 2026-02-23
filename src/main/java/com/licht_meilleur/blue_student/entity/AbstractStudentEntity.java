@@ -265,6 +265,8 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Integer> BR_ACTION_HOLD =
             DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
+    private static final TrackedData<Integer> LAST_SHOT_KIND =
+            DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
 
 
 
@@ -329,15 +331,16 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
     // ===== 演出トリガー =====
     @Override
-    public void requestShot() {
+    public void requestShot(IStudentEntity.ShotKind kind, LivingEntity target) {
+        requestShot(kind);
+    }
+
+    public void requestShot(IStudentEntity.ShotKind kind) {
         if (this.getWorld().isClient) return;
         this.dataTracker.set(SHOT_TRIGGER, this.dataTracker.get(SHOT_TRIGGER) + 1);
 
-        // ★ドローン同期用：サーバーで shotTrigger を進める
-        if (!this.getWorld().isClient) {
-            bumpShotTrigger();
-        }
     }
+
 
     @Override
     public void requestReload() {
@@ -1101,19 +1104,10 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             return PlayState.CONTINUE;
         }
 
-        if (getForm() == StudentForm.BR) {
-            var a = getBrAction();
-            if (a != com.licht_meilleur.blue_student.student.StudentBrAction.NONE) {
-                RawAnimation brAnim = getBrAnimationForAction(a);
-                if (brAnim != null) {
-                    state.getController().setAnimation(brAnim);
-                    return PlayState.CONTINUE;
-                }
-                // nullなら共通のSHOT/RELOAD等にフォールバック
-            }
-        }
 
 
+
+        // ★BRでもSHOTトリガーで射撃アニメを出す
         if (clientShotTicks > 0 || clientShotHoldTicks > 0) {
             if (shotJustStarted) {
                 state.getController().forceAnimationReset();
@@ -1151,23 +1145,43 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     // ===== muzzle近似（サーバー用）=====
     public Vec3d getMuzzlePosApprox() {
         Vec3d eye = this.getEyePos();
-        Vec3d look = this.getRotationVec(1.0f).normalize();
 
+        Vec3d forward = this.getRotationVec(1.0f).normalize();
         Vec3d up = new Vec3d(0, 1, 0);
-        Vec3d right = look.crossProduct(up).normalize(); // 右方向ベクトル
+        Vec3d right = up.crossProduct(forward).normalize();
 
-        Vec3d off;
-        if (this.getForm() == StudentForm.BR && this.getStudentId() == StudentId.HOSHINO) {
-            off = new Vec3d( /* BRホシノ用に調整した値 */ 0.60, -0.80, 1.00 );
-        } else {
-            off = StudentId.fromKey(getStudentId().asString()).getMuzzleOffset();
-        }
-        // ※ getStudentId() が StudentId を返すなら fromKey いらない
+        // ★StudentIdの値を使う（リリース版の 0.60,-0.50,0.18 が生きる）
+        Vec3d off = getStudentId().getMuzzleOffset(); // 例: (x=右, y=上下, z=前)
 
         return eye
-                .add(look.multiply(off.x))   // 前
-                .add(0, off.y, 0)            // 上下
-                .add(right.multiply(off.z)); // 右
+                .add(right.multiply(off.x))
+                .add(up.multiply(off.y))
+                .add(forward.multiply(off.z));
+    }
+    public Vec3d getMuzzlePosFor(WeaponSpec spec) {
+
+        // ★クライアントだけ：ロケーターボーン由来のワールド座標を使う
+        if (this.getWorld().isClient) {
+            if (spec.muzzleLocator == WeaponSpec.MuzzleLocator.SUB_MUZZLE) {
+                if (this.clientSubMuzzleWorldPos != null) return this.clientSubMuzzleWorldPos;
+            } else {
+                if (this.clientMuzzleWorldPos != null) return this.clientMuzzleWorldPos;
+            }
+        }
+
+        // ★サーバー(または未取得時)は必ず近似計算へ
+        return (spec.muzzleLocator == WeaponSpec.MuzzleLocator.SUB_MUZZLE)
+                ? getMuzzlePosApproxSub()
+                : getMuzzlePosApproxMain();
+    }
+
+    public Vec3d getMuzzlePosApproxMain() {
+        return getMuzzlePosApprox(); // 今の既存近似を流用でOK
+    }
+
+    public Vec3d getMuzzlePosApproxSub() {
+        // サブ用の近似。まずはメインと同じでもいいが、ズレるならここを調整
+        return getMuzzlePosApprox();
     }
 
     //　マズル位置
@@ -1389,6 +1403,8 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         this.dataTracker.startTracking(FORM_ID, 0);
         this.dataTracker.startTracking(BR_ACTION_ID, com.licht_meilleur.blue_student.student.StudentBrAction.NONE.ordinal());
         this.dataTracker.startTracking(BR_ACTION_HOLD, 0);
+
+        this.dataTracker.startTracking(LAST_SHOT_KIND, 0); //
 
 
     }
@@ -2222,9 +2238,10 @@ private void tickFormFromEquipment() {
         if (hold > 0) {
             hold--;
             this.dataTracker.set(BR_ACTION_HOLD, hold);
-            if (hold <= 0) {
-                this.dataTracker.set(BR_ACTION_ID, com.licht_meilleur.blue_student.student.StudentBrAction.NONE.ordinal());
-            }
+            // ★これを消す（BR Goalが次tickで上書きするので不要）
+            // if (hold <= 0) {
+            //     this.dataTracker.set(BR_ACTION_ID, StudentBrAction.NONE.ordinal());
+            // }
         }
     }
 
@@ -2293,7 +2310,24 @@ private void tickFormFromEquipment() {
         return true;
     }
 
+    @Override
+    public void requestLookDir(Vec3d dir, int yawSpeed, int pitchSpeed) {
+        if (dir == null) return;
+        if (dir.lengthSquared() < 1.0e-6) return;
 
+        // 既存の「見る仕組み」に寄せる：LookTargetがあるならそれを使うのが一番安全
+        // ＝「いまいる位置 + dir * 100」を疑似ターゲットにする
+        Vec3d p = this.getPos().add(dir.normalize().multiply(100.0));
+        this.requestLookPos(p, yawSpeed, pitchSpeed);
+        // ↑ もし requestLookPos が無い場合は下の代替を使う（次のブロック参照）
+    }
 
+    public StudentBrAction getBrActionServer() {
+        if (this.getWorld().isClient) return StudentBrAction.NONE;
+        int id = this.dataTracker.get(BR_ACTION_ID);
+        StudentBrAction[] vals = StudentBrAction.values();
+        if (id < 0 || id >= vals.length) return StudentBrAction.NONE;
+        return vals[id];
+    }
 
 }

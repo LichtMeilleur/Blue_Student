@@ -150,19 +150,21 @@ public class HoshinoEntity extends AbstractStudentEntity {
         // BR回避（BRのみ動く）
         this.goalSelector.add(3, new HoshinoBrEvadeGoal(this, this));
 
-        //this.goalSelector.add(4, new HoshinoGuardGoal(this, this));
+        this.goalSelector.add(4, new HoshinoGuardGoal(this, this));
 
         // Normal回避（Normalのみ動く）
-        //this.goalSelector.add(5, new StudentEvadeGoal(this, this));
+        this.goalSelector.add(5, new StudentEvadeGoal(this, this));
 
-        // 詰まり脱出（共通）
-        //this.goalSelector.add(6, new StudentStuckEscapeGoal(this, this));
+
 
         // BR戦闘（BRのみ）
         this.goalSelector.add(7, new HoshinoBrCombatGoal(this, this));
 
         // Normal戦闘（Normalのみ）
-        //this.goalSelector.add(8, new StudentCombatGoal(this, this));
+        this.goalSelector.add(8, new StudentCombatGoal(this, this));
+
+        // 詰まり脱出（共通）
+        this.goalSelector.add(9, new StudentStuckEscapeGoal(this, this));
 
         // 以降、Follow/Security/Eatなど共通
         this.goalSelector.add(10, new StudentFollowGoal(this, this, 1.1));

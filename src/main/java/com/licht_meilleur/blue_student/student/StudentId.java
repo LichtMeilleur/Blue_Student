@@ -10,23 +10,23 @@ public enum StudentId implements StringIdentifiable {
     SHIROKO("shiroko", 35, 20,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/shiroko_face.png"),
-                    new Vec3d(0.60, -0.50, 0.18)),
+                    new Vec3d(0.0, -0.5, 1.0)),
     HOSHINO("hoshino", 40, 20,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/hoshino_face.png"),
-            new Vec3d(0.60, -0.80, 1.00)),
+            new Vec3d(0.0, -0.80, 1.00)),
     HINA("hina", 40, 20,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/hina_face.png"),
-            new Vec3d(1.60, -0.8, 0.18)),
+            new Vec3d(0.0, -0.8, 1.00)),
     ALICE("alice", 30, 20,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/alice_face.png"),
-            new Vec3d(0.60, -0.50, 0.18)),
+            new Vec3d(0.0, -0.50, 1.00)),
     KISAKI("kisaki", 28, 18,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/kisaki_face.png"),
-            new Vec3d(0.60, -0.50, 0.18));
+            new Vec3d(0.0, -0.50, 1.00));
 
     private final String key;
     private final int baseMaxHp;

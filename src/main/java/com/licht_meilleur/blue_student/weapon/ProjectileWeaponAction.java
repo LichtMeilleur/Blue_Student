@@ -31,8 +31,17 @@ public class ProjectileWeaponAction implements WeaponAction {
 
         // 発射位置
         final Vec3d spawnPos = (shooterEntity instanceof AbstractStudentEntity se)
-                ? se.getMuzzlePosApprox()
+                ? se.getMuzzlePosFor(spec)
                 : shooterEntity.getEyePos();
+
+        if (shooterEntity.age % 10 == 0) {
+            System.out.println("[MUZZLE] spec=" + spec.muzzleLocator
+                    + " shooterPos=" + shooterEntity.getPos()
+                    + " eye=" + shooterEntity.getEyePos()
+                    + " spawn=" + spawnPos
+                    + " isClient=" + shooterEntity.getWorld().isClient);
+        }
+
 
         Random r = sw.getRandom();
 
