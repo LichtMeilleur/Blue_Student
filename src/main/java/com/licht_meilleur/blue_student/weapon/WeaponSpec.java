@@ -17,7 +17,10 @@ public class WeaponSpec {
     // ★追加：マズル種別（誤字防止）
     public enum MuzzleLocator {
         MUZZLE("muzzle"),
-        SUB_MUZZLE("sub_muzzle");
+
+        SUB_MUZZLE("sub_muzzle"),           // ホシノ用
+        LEFT_SUB_MUZZLE("left_sub_muzzle"), // アリス用
+        RIGHT_SUB_MUZZLE("right_sub_muzzle");
 
         private final String boneName;
 

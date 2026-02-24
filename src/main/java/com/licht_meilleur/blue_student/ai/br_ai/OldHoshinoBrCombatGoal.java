@@ -121,7 +121,7 @@ public class OldHoshinoBrCombatGoal extends Goal {
 
         if (target == null || !target.isAlive()) return false;
 
-        WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, false);
+        WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, IStudentEntity.FireChannel.MAIN);
         double keep = spec.range + 10.0;
         return mob.squaredDistanceTo(target) <= keep * keep;
     }
@@ -175,7 +175,7 @@ public class OldHoshinoBrCombatGoal extends Goal {
             return;
         }
 
-        WeaponSpec mainSpec = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, false);
+        WeaponSpec mainSpec = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, IStudentEntity.FireChannel.MAIN);
 
         // ★reloadTicksLeft を減らす（BR中のreload管理）
         if (student.isReloading()) {
@@ -660,7 +660,7 @@ public class OldHoshinoBrCombatGoal extends Goal {
 
     // ===== ターゲット探索 =====
     private LivingEntity findTarget() {
-        WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, false);
+        WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, IStudentEntity.FireChannel.MAIN);
         Box box = mob.getBoundingBox().expand(spec.range + 10.0);
 
         return mob.getWorld().getEntitiesByClass(LivingEntity.class, box, e ->

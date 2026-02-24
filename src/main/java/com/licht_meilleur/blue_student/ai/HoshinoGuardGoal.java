@@ -1,7 +1,9 @@
 package com.licht_meilleur.blue_student.ai;
 
+import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
 import com.licht_meilleur.blue_student.entity.HoshinoEntity;
 import com.licht_meilleur.blue_student.student.IStudentEntity;
+import com.licht_meilleur.blue_student.student.StudentForm;
 import net.minecraft.entity.ai.goal.Goal;
 
 import java.util.EnumSet;
@@ -21,8 +23,11 @@ public class HoshinoGuardGoal extends Goal {
 
     @Override
     public boolean canStart() {
+        if (mob.getForm() == StudentForm.BR) return false;
         return mob.isGuarding() && student.hasQueuedFire();
     }
+
+
 
     @Override
     public void start() {
@@ -32,6 +37,7 @@ public class HoshinoGuardGoal extends Goal {
 
     @Override
     public boolean shouldContinue() {
+        if (mob.getForm() == StudentForm.BR) return false;
         return mob.isGuarding() && keepTicks > 0;
     }
 

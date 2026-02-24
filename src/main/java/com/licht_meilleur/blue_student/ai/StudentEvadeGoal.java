@@ -1,5 +1,6 @@
 package com.licht_meilleur.blue_student.ai;
 
+import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
 import com.licht_meilleur.blue_student.student.IStudentEntity;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
 import com.licht_meilleur.blue_student.weapon.WeaponSpec;
@@ -54,6 +55,7 @@ public class StudentEvadeGoal extends Goal {
     @Override
     public boolean canStart() {
         StudentAiMode mode = student.getAiMode();
+        if (mob instanceof AbstractStudentEntity ase && ase.isBrActionActiveServer()) return false;
         if (mode != StudentAiMode.FOLLOW && mode != StudentAiMode.SECURITY) return false;
 
         // ★連発防止

@@ -22,10 +22,11 @@ public class StudentAimGoal extends Goal {
     private final WeaponAction shotgunHitscanAction = new ShotgunHitscanWeaponAction();
 
     private LivingEntity fireTarget;
-    private boolean fireIsSub = false;
+    private IStudentEntity.FireChannel fireChannel = IStudentEntity.FireChannel.MAIN;
     private int aimTicks;
 
     private static final int AIM_TICKS = 1;
+
 
     private LookRequest activeLook;
 
@@ -34,6 +35,7 @@ public class StudentAimGoal extends Goal {
         this.student = student;
         this.setControls(EnumSet.of(Control.LOOK));
     }
+
 
     @Override
     public boolean canStart() {
@@ -49,12 +51,7 @@ public class StudentAimGoal extends Goal {
     @Override
     public void tick() {
 
-        if (mob.age % 20 == 0) {
-            System.out.println("[AIM] evading=" + student.isEvading()
-                    + " form=" + (mob instanceof AbstractStudentEntity ase ? ase.getForm() : "NA")
-                    + " brAction=" + (mob instanceof AbstractStudentEntity ase2 ? ase2.getBrActionServer() : "NA")
-                    + " target=" + (mob.getTarget() != null));
-        }
+
 
 
 
@@ -83,49 +80,82 @@ public class StudentAimGoal extends Goal {
 
 
 // =========================
-// 2) 射撃キュー取得（BRはdesiredのみ）
+// 2) 射撃キュー取得（チャンネル）
 // =========================
         if (fireTarget == null) {
 
-            boolean desiredIsSub = false;
-
+            // ---- BRは「欲しいチャンネルだけ消費」＆DODGE中はMAINのみ ----
             if (mob instanceof AbstractStudentEntity ase && ase.getForm() == StudentForm.BR) {
+
                 StudentBrAction a = ase.getBrActionServer();
-                desiredIsSub = (a != null && a.shotKind == IStudentEntity.ShotKind.SUB);
+                boolean dodge = (a == StudentBrAction.DODGE_SHOT);
 
-                // ★BRは「欲しい方だけ」取り出す（交互化を止める）
-                LivingEntity t = desiredIsSub
-                        ? (student.hasQueuedFireSub() ? student.consumeQueuedFireSubTarget() : null)
-                        : (student.hasQueuedFire()    ? student.consumeQueuedFireTarget()    : null);
+                IStudentEntity.FireChannel desired = IStudentEntity.FireChannel.MAIN;
 
-                if (t != null && t.isAlive()) {
-                    fireTarget = t;
-                    fireIsSub = desiredIsSub;
-                    aimTicks = AIM_TICKS;
-                    stopNavigationIfNeeded();
+                if (!dodge && a != null && a.shotKind == IStudentEntity.ShotKind.SUB) {
+                    // いまはSUB=SUB_L扱い（AliceでSUB_Rを足すのは後）
+                    desired = IStudentEntity.FireChannel.SUB_L;
                 }
+
+                LivingEntity t = null;
+
+                if (dodge) {
+                    // DODGE中はMAINのみ
+                    if (student.hasQueuedFire(IStudentEntity.FireChannel.MAIN)) {
+                        t = student.consumeQueuedFireTarget(IStudentEntity.FireChannel.MAIN);
+                    }
+                    if (t != null && t.isAlive()) {
+                        fireTarget = t;
+                        fireChannel = IStudentEntity.FireChannel.MAIN;
+                        aimTicks = 0; // BR即発射
+                        stopNavigationIfNeeded();
+                    }
+                } else {
+                    // BRは「欲しい方だけ」消費（反対を勝手に食わない）
+                    if (student.hasQueuedFire(desired)) {
+                        t = student.consumeQueuedFireTarget(desired);
+                    }
+
+                    if (t != null && t.isAlive()) {
+                        fireTarget = t;
+                        fireChannel = desired;
+                        aimTicks = 0; // BR即発射
+                        stopNavigationIfNeeded();
+                    }
+                }
+
+                // 欲しい方が無いなら何もしない
 
             } else {
-                // ★BR以外は今まで通りでもOK（SUB優先が無いならMAINだけのはず）
-                LivingEntity tMain = student.hasQueuedFire() ? student.consumeQueuedFireTarget() : null;
-                if (tMain != null && tMain.isAlive()) {
-                    fireTarget = tMain;
-                    fireIsSub = false;
-                    aimTicks = AIM_TICKS;
-                    stopNavigationIfNeeded();
+                // ---- 通常フォーム：SUB優先→MAIN（好みで順序変更可） ----
+                LivingEntity t = null;
+
+                if (student.hasQueuedFire(IStudentEntity.FireChannel.SUB_L)) {
+                    t = student.consumeQueuedFireTarget(IStudentEntity.FireChannel.SUB_L);
+                    if (t != null && t.isAlive()) {
+                        fireTarget = t;
+                        fireChannel = IStudentEntity.FireChannel.SUB_L;
+                        aimTicks = AIM_TICKS;
+                        stopNavigationIfNeeded();
+                    }
+                } else if (student.hasQueuedFire(IStudentEntity.FireChannel.SUB_R)) {
+                    t = student.consumeQueuedFireTarget(IStudentEntity.FireChannel.SUB_R);
+                    if (t != null && t.isAlive()) {
+                        fireTarget = t;
+                        fireChannel = IStudentEntity.FireChannel.SUB_R;
+                        aimTicks = AIM_TICKS;
+                        stopNavigationIfNeeded();
+                    }
+                } else if (student.hasQueuedFire(IStudentEntity.FireChannel.MAIN)) {
+                    t = student.consumeQueuedFireTarget(IStudentEntity.FireChannel.MAIN);
+                    if (t != null && t.isAlive()) {
+                        fireTarget = t;
+                        fireChannel = IStudentEntity.FireChannel.MAIN;
+                        aimTicks = AIM_TICKS;
+                        stopNavigationIfNeeded();
+                    }
                 }
             }
-        }
-
-// ここで “この発射の spec” を確定
-        if (fireTarget != null) {
-            WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId(),
-                    student instanceof AbstractStudentEntity ase ? ase.getForm() : StudentForm.NORMAL,
-                    fireIsSub // ★ここが重要
-            );
-
-            // ↓この spec で射撃処理（hitscan / projectile / cooldown / ammo / muzzle）
-            // doFire(spec, fireTarget, fireIsSub);
         }
 
         // =========================
@@ -168,6 +198,17 @@ public class StudentAimGoal extends Goal {
             if (activeLook.holdTicks <= 0) activeLook = null;
         }
 
+
+
+        if (mob.age % 10 == 0 && mob instanceof AbstractStudentEntity ase && ase.getForm() == StudentForm.BR) {
+            System.out.println("[AIM-BR] hasSub=" + student.hasQueuedFireSub()
+                    + " hasMain=" + student.hasQueuedFire()
+                    + " fireTarget=" + (fireTarget != null)
+                    + " aimTicks=" + aimTicks
+                    + " brAction=" + ase.getBrActionServer());
+        }
+
+
         // 6) 実射撃
         if (fireTarget == null) return;
 
@@ -180,9 +221,11 @@ public class StudentAimGoal extends Goal {
             form = ase.getForm();
         }
 
-// ★この発射の spec を確定（fireIsSub 以外を参照しない）
-        final boolean isSubShot = fireIsSub;
-        final WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId(), form, isSubShot);
+        final IStudentEntity.FireChannel ch = fireChannel;
+        final boolean isSubShot = (ch != IStudentEntity.FireChannel.MAIN);
+
+// まずは既存APIに合わせてbooleanで渡す（SUB_L/SUB_Rはどちらもsub扱い）
+        final WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId(), form, IStudentEntity.FireChannel.SUB_L);
 
 // 射程＆視界チェック
         double dist = mob.distanceTo(fireTarget);
@@ -236,7 +279,8 @@ public class StudentAimGoal extends Goal {
         boolean stopNav = true;
 
         if (mob instanceof AbstractStudentEntity se) {
-            stopNav = se.shouldStopNavigationForShot(fireIsSub);
+            boolean isSub = (fireChannel != IStudentEntity.FireChannel.MAIN);
+            stopNav = se.shouldStopNavigationForShot(isSub);
         }
 
         if (!flying && stopNav) {

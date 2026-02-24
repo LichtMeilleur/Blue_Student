@@ -1,5 +1,6 @@
 package com.licht_meilleur.blue_student.weapon;
 
+import com.licht_meilleur.blue_student.student.IStudentEntity;
 import com.licht_meilleur.blue_student.student.StudentForm;
 import com.licht_meilleur.blue_student.student.StudentId;
 
@@ -71,7 +72,7 @@ public class WeaponSpecs {
 
     // ★BRサブ（ハンドガン）※hitscanの引数は ALICE_MAIN と同じ並びで書く
     private static final WeaponSpec HOSHINO_BR_SUB = WeaponSpec.hitscan(
-            16, 2, 1.4f,
+            16, 0, 1.4f,
             0f, 0.04f,
             1,
             0.0f,
@@ -86,6 +87,50 @@ public class WeaponSpecs {
             1.0f,
             2,
             WeaponSpec.MuzzleLocator.SUB_MUZZLE
+
+    );
+
+    private static final WeaponSpec ALICE_BR_MAIN = WeaponSpec.projectile(
+            16, 2, 2.5f, 2.2f, 0.22f, 8, 0.5f, true,
+            2.5, 12.0,
+            5, 35, 0, 4.0, false,
+            WeaponSpec.FxType.RAILGUN, 3.0f, 12,WeaponSpec.MuzzleLocator.MUZZLE
+    );
+
+    private static final WeaponSpec ALICE_BR_SUB_L = WeaponSpec.hitscan(
+            18, 30, 5.0f,
+            0f, 0.04f,
+            1,
+            0.0f,
+            true,
+            1.5, 14.0,
+            15,
+            25,
+            0,
+            3.5,
+            true,
+            WeaponSpec.FxType.BULLET,
+            1.5f,
+            8,
+            WeaponSpec.MuzzleLocator.LEFT_SUB_MUZZLE
+
+    );
+    private static final WeaponSpec ALICE_BR_SUB_R = WeaponSpec.hitscan(
+            18, 30, 5.0f,
+            0f, 0.04f,
+            1,
+            0.0f,
+            true,
+            1.5, 14.0,
+            15,
+            25,
+            0,
+            3.5,
+            true,
+            WeaponSpec.FxType.BULLET,
+            1.5f,
+            8,
+            WeaponSpec.MuzzleLocator.RIGHT_SUB_MUZZLE
 
     );
 
@@ -105,21 +150,29 @@ public class WeaponSpecs {
     // =========================
     // 新API：フォーム＋サブ判定
     // =========================
-    public static WeaponSpec forStudent(StudentId id, StudentForm form, boolean sub) {
-        return switch (id) {
+    public static WeaponSpec forStudent(StudentId id, StudentForm form, IStudentEntity.FireChannel ch) {
+        if (ch == null) ch = IStudentEntity.FireChannel.MAIN;
 
+        return switch (id) {
             case HOSHINO -> {
                 if (form == StudentForm.BR) {
-                    yield sub ? HOSHINO_BR_SUB : HOSHINO_BR_MAIN;
+                    // ホシノBRはSUB_L/SUB_Rどちらでも sub_muzzle でOK
+                    yield (ch == IStudentEntity.FireChannel.MAIN) ? HOSHINO_BR_MAIN : HOSHINO_BR_SUB;
                 } else {
-                    // ★通常フォームはサブ射撃なし：sub無視
-                    yield HOSHINO_MAIN;
+                    yield HOSHINO_MAIN; // 通常はサブなし
                 }
             }
 
             case ALICE -> {
-                // BR未実装ならここは一旦通常固定でもOK
-                yield ALICE_MAIN;
+                if (form == StudentForm.BR) {
+                    yield switch (ch) {
+                        case MAIN  -> ALICE_BR_MAIN;
+                        case SUB_L -> ALICE_BR_SUB_L;
+                        case SUB_R -> ALICE_BR_SUB_R;
+                    };
+                } else {
+                    yield ALICE_MAIN;
+                }
             }
 
             default -> forStudent(id);

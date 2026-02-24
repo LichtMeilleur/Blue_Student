@@ -171,10 +171,13 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     // ===== queue fire =====
     private UUID queuedFireTargetUuid = null;     // main
     private UUID queuedFireSubTargetUuid = null;  // sub
+    private boolean lastConsumedWasSub = false; // sub
 
-    // 直前に消費された種別（AimGoalが参照）
-    private boolean lastConsumedWasSub = false;
+    // ===== queue fire (channel) =====
+    private final java.util.EnumMap<IStudentEntity.FireChannel, UUID> queuedFire =
+            new java.util.EnumMap<>(IStudentEntity.FireChannel.class);
 
+    private IStudentEntity.FireChannel lastConsumedChannel = IStudentEntity.FireChannel.MAIN;
 
 
     private int lifeTimer;
@@ -254,6 +257,12 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     private int lookMoveDirTicks = 0;
 
 
+    // AbstractStudentEntity に追加（client側で使う）
+    private StudentBrAction lastBrActionClient = StudentBrAction.NONE;
+
+
+    private int lastBrActionVerClient = -1;
+
 
 
 
@@ -266,6 +275,9 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     private static final TrackedData<Integer> BR_ACTION_HOLD =
             DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Integer> LAST_SHOT_KIND =
+            DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
+    // 既存：BR_ACTION_ID, BR_ACTION_HOLD がある前提
+    private static final TrackedData<Integer> BR_ACTION_VER =
             DataTracker.registerData(AbstractStudentEntity.class, TrackedDataHandlerRegistry.INTEGER);
 
 
@@ -1060,17 +1072,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             return PlayState.CONTINUE;
         }
 
-        // 先に BR action を最優先にする（すでにあなたが入れてる部分を “もっと上” に置くのが重要）
-        if (getForm() == StudentForm.BR) {
-            var a = getBrAction();
-            if (a != StudentBrAction.NONE) {
-                RawAnimation brAnim = getBrAnimationForAction(a);
-                if (brAnim != null) {
-                    state.getController().setAnimation(brAnim);
-                    return PlayState.CONTINUE;
-                }
-            }
-        }
+
 
 // BR中は旧dodgeトリガーを無視（ログも止まる）
         if (clientDodgeTicks > 0) {
@@ -1116,6 +1118,17 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             state.getController().setAnimation(SHOT);
             return PlayState.CONTINUE;
         }
+        // 次に BR action
+        if (getForm() == StudentForm.BR) {
+            var a = getBrAction();
+            if (a != StudentBrAction.NONE) {
+                RawAnimation brAnim = getBrAnimationForAction(a);
+                if (brAnim != null) {
+                    state.getController().setAnimation(brAnim);
+                    return PlayState.CONTINUE;
+                }
+            }
+        }
 
 
 
@@ -1160,19 +1173,25 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     }
     public Vec3d getMuzzlePosFor(WeaponSpec spec) {
 
-        // ★クライアントだけ：ロケーターボーン由来のワールド座標を使う
         if (this.getWorld().isClient) {
             if (spec.muzzleLocator == WeaponSpec.MuzzleLocator.SUB_MUZZLE) {
                 if (this.clientSubMuzzleWorldPos != null) return this.clientSubMuzzleWorldPos;
+            } else if (spec.muzzleLocator == WeaponSpec.MuzzleLocator.LEFT_SUB_MUZZLE) {
+                if (this.clientLeftSubMuzzleWorldPos != null) return this.clientLeftSubMuzzleWorldPos;
+            } else if (spec.muzzleLocator == WeaponSpec.MuzzleLocator.RIGHT_SUB_MUZZLE) {
+                if (this.clientRightSubMuzzleWorldPos != null) return this.clientRightSubMuzzleWorldPos;
             } else {
                 if (this.clientMuzzleWorldPos != null) return this.clientMuzzleWorldPos;
             }
         }
 
-        // ★サーバー(または未取得時)は必ず近似計算へ
-        return (spec.muzzleLocator == WeaponSpec.MuzzleLocator.SUB_MUZZLE)
-                ? getMuzzlePosApproxSub()
-                : getMuzzlePosApproxMain();
+        // server / fallback（近似）
+        return switch (spec.muzzleLocator) {
+            case SUB_MUZZLE -> getMuzzlePosApproxSub();
+            case LEFT_SUB_MUZZLE -> getMuzzlePosApproxSub();   // まずは同じ近似でOK
+            case RIGHT_SUB_MUZZLE -> getMuzzlePosApproxSub();  // まずは同じ近似でOK
+            default -> getMuzzlePosApproxMain();
+        };
     }
 
     public Vec3d getMuzzlePosApproxMain() {
@@ -1405,6 +1424,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         this.dataTracker.startTracking(BR_ACTION_HOLD, 0);
 
         this.dataTracker.startTracking(LAST_SHOT_KIND, 0); //
+        this.dataTracker.startTracking(BR_ACTION_VER, 0);
 
 
     }
@@ -1463,6 +1483,20 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
         }
 
         if (isLifeLocked()) return;
+
+        // ===== DOT(継続ダメージ) を “被弾リアクション” 扱いにしない =====
+        // ざっくり：微小ダメージはDOTとして扱う（毒/燃焼/ウィザー等のtickが大体ここに入る）
+        // ※閾値は好みで調整（1.0〜2.0が無難）
+        if (amount <= 1.0f) {
+            int prevHurt = this.hurtTime;
+            super.applyDamage(source, amount);
+
+            // ★hurtTime を戻して「被弾した」扱いにしない
+            // （CombatGoal の gotHitThisTick を抑止できる）
+            this.hurtTime = Math.min(this.hurtTime, prevHurt);
+
+            return;
+        }
 
         float after = this.getHealth() - amount;
 
@@ -2146,74 +2180,46 @@ private void tickFormFromEquipment() {
 
 
 
-    // ===== queue fire =====
-
-    private boolean queuedFireIsSub = false;
+    // ===== queue fire (channel) =====
 
     @Override
-    public void queueFire(LivingEntity target) {
+    public void queueFire(LivingEntity target, IStudentEntity.FireChannel ch) {
         if (getWorld().isClient) return;
         if (target == null) return;
+        if (ch == null) ch = IStudentEntity.FireChannel.MAIN;
 
-        // 両立させない
-        queuedFireSubTargetUuid = null;
+        // 「両立させない」方針なら：他チャンネルを消す
+        // 交互撃ち/暴発が嫌ならこのままでOK
+        queuedFire.clear();
 
-        queuedFireTargetUuid = target.getUuid();
+        queuedFire.put(ch, target.getUuid());
     }
 
     @Override
-    public void queueFireSub(LivingEntity target) {
-        if (getWorld().isClient) return;
-        if (target == null) return;
-
-        // 両立させない
-        queuedFireTargetUuid = null;
-
-        queuedFireSubTargetUuid = target.getUuid();
+    public boolean hasQueuedFire(IStudentEntity.FireChannel ch) {
+        if (getWorld().isClient) return false;
+        if (ch == null) ch = IStudentEntity.FireChannel.MAIN;
+        return queuedFire.get(ch) != null;
     }
 
     @Override
-    public boolean hasQueuedFire() {
-        return queuedFireTargetUuid != null;
-    }
-
-    @Override
-    public boolean hasQueuedFireSub() {
-        return queuedFireSubTargetUuid != null;
-    }
-
-    @Override
-    public LivingEntity consumeQueuedFireTarget() {
+    public LivingEntity consumeQueuedFireTarget(IStudentEntity.FireChannel ch) {
         if (getWorld().isClient) return null;
         if (!(getWorld() instanceof ServerWorld sw)) return null;
-        if (queuedFireTargetUuid == null) return null;
+        if (ch == null) ch = IStudentEntity.FireChannel.MAIN;
 
-        var e = sw.getEntity(queuedFireTargetUuid);
+        UUID id = queuedFire.remove(ch);
+        if (id == null) return null;
 
-        queuedFireTargetUuid = null;
-        lastConsumedWasSub = false;
+        lastConsumedChannel = ch;
 
+        Entity e = sw.getEntity(id);
         return (e instanceof LivingEntity le) ? le : null;
     }
 
     @Override
-    public LivingEntity consumeQueuedFireSubTarget() {
-        if (getWorld().isClient) return null;
-        if (!(getWorld() instanceof ServerWorld sw)) return null;
-        if (queuedFireSubTargetUuid == null) return null;
-
-        var e = sw.getEntity(queuedFireSubTargetUuid);
-
-        queuedFireSubTargetUuid = null;
-        lastConsumedWasSub = true;
-
-        return (e instanceof LivingEntity le) ? le : null;
-    }
-
-    @Override
-    public boolean consumeQueuedFireIsSub() {
-        // 「直前の発射がsubか？」を返すだけ
-        return lastConsumedWasSub;
+    public IStudentEntity.FireChannel getLastConsumedFireChannel() {
+        return lastConsumedChannel;
     }
 
 
@@ -2223,11 +2229,19 @@ private void tickFormFromEquipment() {
     private int brActionTicks = 0;
 
     @Override
-    public void requestBrAction(com.licht_meilleur.blue_student.student.StudentBrAction action, int holdTicks) {
+    public void requestBrAction(StudentBrAction action, int holdTicks) {
         if (this.getWorld().isClient) return;
 
         this.dataTracker.set(BR_ACTION_ID, action.ordinal());
         this.dataTracker.set(BR_ACTION_HOLD, Math.max(0, holdTicks));
+
+        // ★毎回バージョンを進める（同じactionでもアニメを再スタートさせるため）
+        int v = this.dataTracker.get(BR_ACTION_VER);
+        this.dataTracker.set(BR_ACTION_VER, v + 1);
+    }
+
+    public int getBrActionVersion() {
+        return this.dataTracker.get(BR_ACTION_VER);
     }
 
     // 毎tick減らす（AbstractStudentEntity.tick() か tickMovement() の最後あたりに）
@@ -2329,5 +2343,26 @@ private void tickFormFromEquipment() {
         if (id < 0 || id >= vals.length) return StudentBrAction.NONE;
         return vals[id];
     }
+    public boolean isBrActionActiveServer() {
+        if (getForm() != StudentForm.BR) return false;
+        StudentBrAction a = getBrActionServer();
+        if (a == null || a == StudentBrAction.NONE || a == StudentBrAction.IDLE) return false;
+        return this.dataTracker.get(BR_ACTION_HOLD) > 0;
+    }
+
+    // ===== BR combat goal 用：被弾リアクション抑制 =====
+    public boolean shouldIgnoreHitReactNow() {
+        // 復活/無敵処理中は当然無視
+        if (isLifeLocked()) return true;
+
+        // 回避中はGoal側で止めてるけど念のため
+        if (isEvading()) return true;
+
+        // BRアクション中（DODGEなど）に“毒のtick”で割り込むと崩れるので無視
+        if (getForm() == StudentForm.BR && isBrActionActiveServer()) return true;
+
+        return false;
+    }
+
 
 }

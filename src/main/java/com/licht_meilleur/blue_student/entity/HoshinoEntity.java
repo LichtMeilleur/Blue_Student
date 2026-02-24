@@ -109,10 +109,11 @@ public class HoshinoEntity extends AbstractStudentEntity {
             case DODGE_SHOT          -> DODGE_SHOT;
             case GUARD_TACKLE        -> GUARD_TACKLE;
             case GUARD_BASH          -> GUARD_BASH;
-            case SUB_RELOAD_SHOT     -> SUB_RELOAD_SHOT;
-            case SUB_SHOT            -> SUB_SHOT;
+
             case RIGHT_SIDE_SUB_SHOT -> RIGHT_SIDE_SUB_SHOT;
             case LEFT_SIDE_SUB_SHOT  -> LEFT_SIDE_SUB_SHOT;
+            case SUB_SHOT, SUB_SHOT_A, SUB_SHOT_B -> SUB_SHOT;
+            case SUB_RELOAD_SHOT, SUB_RELOAD_SHOT_A, SUB_RELOAD_SHOT_B -> SUB_RELOAD_SHOT;
             default -> null;
         };
     }
@@ -353,6 +354,17 @@ public class HoshinoEntity extends AbstractStudentEntity {
         super.initDataTracker();
         this.dataTracker.startTracking(TD_GUARDING, false);
         this.dataTracker.startTracking(TD_GUARD_SHOOTING, false);
+    }
+
+    @Override
+    public boolean damage(net.minecraft.entity.damage.DamageSource source, float amount) {
+        boolean ok = super.damage(source, amount);
+        if (!this.getWorld().isClient) {
+            System.out.println("[DMG] ok=" + ok + " amount=" + amount
+                    + " src=" + source.getName()
+                    + " hp=" + this.getHealth());
+        }
+        return ok;
     }
 
 }

@@ -29,9 +29,7 @@ public interface IStudentEntity {
     boolean isReloading();
     void startReload(WeaponSpec spec);
     void tickReload(WeaponSpec spec);
-    void queueFire(LivingEntity target);
-    LivingEntity consumeQueuedFireTarget(); // 取ったら消える
-    boolean hasQueuedFire();
+
 
 
     void requestLookTarget(net.minecraft.entity.LivingEntity target, int priority, int holdTicks);
@@ -62,12 +60,8 @@ public interface IStudentEntity {
 
 
     // ===== animation / presentation hooks =====
-    default void requestShot(ShotKind kind) {
-        requestShot(kind, null);
-    }
-    default void requestShot(ShotKind kind, LivingEntity target) {
-        requestShot(kind);
-    }
+    default void requestShot(ShotKind kind) { requestShot(kind, null); }
+    default void requestShot(ShotKind kind, LivingEntity target) { /* default no-op */ }
 
     default void requestReload() {}
 
@@ -78,19 +72,64 @@ public interface IStudentEntity {
     default void requestSwim() {}
     default void requestSit() {}
 
+    default void requestBrAction(StudentBrAction action, int holdTicks, boolean restart) {
+        // 既存実装しかない entity は restart無視でOK
+        requestBrAction(action, holdTicks);
+    }
 
 
 
-    // サブ射撃（sub_muzzle）用
-    void queueFireSub(net.minecraft.entity.LivingEntity target);
-    boolean hasQueuedFireSub();
-    net.minecraft.entity.LivingEntity consumeQueuedFireSubTarget();
+        enum FireChannel {
+            MAIN,
+            SUB_L,
+            SUB_R
+        }
+
+        // ===== 新API（チャンネル）=====
+        void queueFire(LivingEntity target, FireChannel ch);
+        boolean hasQueuedFire(FireChannel ch);
+        LivingEntity consumeQueuedFireTarget(FireChannel ch);
+
+        FireChannel getLastConsumedFireChannel();
+
+        // ===== 後方互換（既存コードを壊さない）=====
+        default void queueFire(LivingEntity target) {
+            queueFire(target, FireChannel.MAIN);
+        }
+
+        default void queueFireSub(LivingEntity target) {
+            queueFire(target, FireChannel.SUB_L);
+        }
+
+        default boolean hasQueuedFire() {
+            return hasQueuedFire(FireChannel.MAIN);
+        }
+
+        default boolean hasQueuedFireSub() {
+            return hasQueuedFire(FireChannel.SUB_L);
+        }
+
+        default LivingEntity consumeQueuedFireTarget() {
+            return consumeQueuedFireTarget(FireChannel.MAIN);
+        }
+
+        default LivingEntity consumeQueuedFireSubTarget() {
+            return consumeQueuedFireTarget(FireChannel.SUB_L);
+        }
+
+        default boolean consumeQueuedFireIsSub() {
+            FireChannel ch = getLastConsumedFireChannel();
+            return ch != null && ch != FireChannel.MAIN;
+        }
 
 
 
 
-    // AimGoalが「今の射撃はサブか」を知る用（任意だが便利）
-    boolean consumeQueuedFireIsSub();
+
+
+
+
+
 
     void requestBrAction(com.licht_meilleur.blue_student.student.StudentBrAction action, int holdTicks);
 

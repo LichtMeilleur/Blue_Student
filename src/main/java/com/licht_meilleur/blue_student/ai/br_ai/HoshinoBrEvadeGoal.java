@@ -1,5 +1,6 @@
 package com.licht_meilleur.blue_student.ai.br_ai;
 
+import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
 import com.licht_meilleur.blue_student.student.IStudentEntity;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
 import com.licht_meilleur.blue_student.weapon.WeaponSpec;
@@ -44,6 +45,7 @@ public class HoshinoBrEvadeGoal extends Goal {
     @Override
     public boolean canStart() {
         if (!(mob.getWorld() instanceof ServerWorld)) return false;
+        if (mob instanceof AbstractStudentEntity ase && ase.isBrActionActiveServer()) return false;
 
         if (student instanceof com.licht_meilleur.blue_student.entity.AbstractStudentEntity ase) {
             if (ase.getForm() != com.licht_meilleur.blue_student.student.StudentForm.BR) return false;

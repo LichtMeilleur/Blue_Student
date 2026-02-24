@@ -1,5 +1,6 @@
 package com.licht_meilleur.blue_student.ai;
 
+import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
 import com.licht_meilleur.blue_student.student.IStudentEntity;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
 import net.minecraft.block.Blocks;
@@ -72,6 +73,7 @@ public class StudentStuckEscapeGoal extends Goal {
     @Override
     public boolean canStart() {
         if (!(mob.getWorld() instanceof ServerWorld)) return false;
+        if (mob instanceof AbstractStudentEntity ase && ase.isBrActionActiveServer()) return false;
 
         StudentAiMode mode = student.getAiMode();
         if (mode != StudentAiMode.FOLLOW && mode != StudentAiMode.SECURITY) return false;

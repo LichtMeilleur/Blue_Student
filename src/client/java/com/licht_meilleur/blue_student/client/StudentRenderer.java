@@ -54,22 +54,6 @@ public class StudentRenderer<T extends AbstractStudentEntity> extends GeoEntityR
 
 */
 
-         Vec3d lastLoggedSub = null;
-        int lastLogTick = 0;
-
-        if ("sub_muzzle".equals(bone.getName())) {
-            Vec3d w = worldPosFromCurrentMatrix(poseStack, 0, 0, 0);
-            animatable.setClientSubMuzzleWorldPos(w);
-
-            // 10tickに1回、かつ大きく動いた時だけログ
-            if (animatable.age - lastLogTick >= 10) {
-                if (lastLoggedSub == null || lastLoggedSub.squaredDistanceTo(w) > 0.01) {
-                    System.out.println("[MUZZLE] sub=" + w);
-                    lastLoggedSub = w;
-                    lastLogTick = animatable.age;
-                }
-            }
-        }
 
 
         // 2) 新方式：Bedrock geo の "locators" を拾う（BRがこれ）
@@ -92,6 +76,26 @@ public class StudentRenderer<T extends AbstractStudentEntity> extends GeoEntityR
                     (float) (subLocal.z / 16.0)
             );
             animatable.setClientSubMuzzleWorldPos(w);
+        }
+
+        Vec3d sub_L_Local = tryGetLocatorLocalPos(bone, "Left_sub_muzzle");
+        if (sub_L_Local != null) {
+            Vec3d w = worldPosFromCurrentMatrix(poseStack,
+                    (float) (sub_L_Local.x / 16.0),
+                    (float) (sub_L_Local.y / 16.0),
+                    (float) (sub_L_Local.z / 16.0)
+            );
+            animatable.setclientLeftSubMuzzleWorldPos(w);
+        }
+
+        Vec3d sub_R_Local = tryGetLocatorLocalPos(bone, "right_sub_muzzle");
+        if (sub_R_Local != null) {
+            Vec3d w = worldPosFromCurrentMatrix(poseStack,
+                    (float) (sub_R_Local.x / 16.0),
+                    (float) (sub_R_Local.y / 16.0),
+                    (float) (sub_R_Local.z / 16.0)
+            );
+            animatable.setclientRightSubMuzzleWorldPos(w);
         }
 
         super.renderRecursively(poseStack, animatable, bone, renderLayer, bufferSource, buffer,
