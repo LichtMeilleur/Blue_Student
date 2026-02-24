@@ -31,6 +31,7 @@ public class HoshinoEntity extends AbstractStudentEntity {
     private static final TrackedData<Boolean> TD_GUARD_SHOOTING =
             DataTracker.registerData(HoshinoEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
+    public static final String ANIM_SHOT = "animation.model.shot";
     public static final String ANIM_GUARD_IDLE = "animation.model.guard_idle";
     public static final String ANIM_GUARD_WALK = "animation.model.guard_walk";//BRverでは使わない
     public static final String ANIM_GUARD_SHOT = "animation.model.guard_shot";
@@ -50,7 +51,7 @@ public class HoshinoEntity extends AbstractStudentEntity {
     public static final String ANIM_RIGHT_SIDE_SUB_SHOT = "animation.model.right_side_sub_shot";
     public static final String ANIM_LEFT_SIDE_SUB_SHOT= "animation.model.left_side_sub_shot";
 
-
+    private static final RawAnimation MAIN_SHOT = RawAnimation.begin().thenPlay(ANIM_SHOT); // ここは共通shot名でOK
     private static final RawAnimation GUARD_IDLE = RawAnimation.begin().thenLoop(ANIM_GUARD_IDLE);
     private static final RawAnimation GUARD_WALK = RawAnimation.begin().thenLoop(ANIM_GUARD_WALK);
     private static final RawAnimation GUARD_SHOT = RawAnimation.begin().thenPlay(ANIM_GUARD_SHOT);
@@ -104,6 +105,7 @@ public class HoshinoEntity extends AbstractStudentEntity {
     @Override
     protected RawAnimation getBrAnimationForAction(StudentBrAction a) {
         return switch (a) {
+            case MAIN_SHOT           -> MAIN_SHOT;
             case DODGE_SHOT          -> DODGE_SHOT;
             case GUARD_TACKLE        -> GUARD_TACKLE;
             case GUARD_BASH          -> GUARD_BASH;
