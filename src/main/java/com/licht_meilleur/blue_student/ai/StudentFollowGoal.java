@@ -6,8 +6,11 @@ import net.minecraft.entity.ai.goal.Goal;
 import net.minecraft.entity.mob.PathAwareEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -167,9 +170,12 @@ public class StudentFollowGoal extends Goal {
         }
 
 
-        mob.getNavigation().startMovingTo(goal.x, goal.y, goal.z, speed);
+        if (isFlyingFollow() && mob.getWorld() instanceof ServerWorld sw) {
+            flyMoveToward(sw, goal);
+        } else {
+            mob.getNavigation().startMovingTo(goal.x, goal.y, goal.z, speed);
+        }
 
-        // 視線：基本は移動方向を向く（見た目が自然）
         lookMoveDirectionOrOwner();
     }
 
@@ -226,12 +232,14 @@ public class StudentFollowGoal extends Goal {
     private void lookMoveDirectionOrOwner() {
         Vec3d v = mob.getVelocity();
         Vec3d hv = new Vec3d(v.x, 0, v.z);
-        if (hv.lengthSquared() > 1.0e-4) {
 
-            return;
+        if (hv.lengthSquared() > 1.0e-4) {
+            // 動いてるときは移動方向を見る
+            student.requestLookMoveDir(10, 2);
+        } else {
+            // 動いてないときだけオーナーを見る
+            mob.getLookControl().lookAt(owner, 30.0f, 30.0f);
         }
-        // 動いてない時だけオーナーを見る
-        student.requestLookMoveDir(10, 2);
     }
 
     private PlayerEntity resolveOwnerOnly() {
@@ -273,5 +281,56 @@ public class StudentFollowGoal extends Goal {
             return w.getBlockState(p).isAir() && w.getBlockState(p.up()).isAir();
         }
         return false;
+    }
+    private boolean isFlyingFollow() {
+        // ここはあなたの設計に合わせて条件を決めてOK
+        // 例: mobがNoGravityなら飛行制御にする
+        return mob.hasNoGravity();
+    }
+
+    private void flyMoveToward(ServerWorld sw, Vec3d goal) {
+        mob.getNavigation().stop();
+        mob.setNoGravity(true);
+
+        Vec3d pos = mob.getPos();
+
+        // オーナーの少し上を狙う（地面追従でガタつかない）
+        Vec3d desired = goal.add(0, 1.2, 0);
+
+        Vec3d to = desired.subtract(pos);
+        double dist = to.length();
+        if (dist < 0.001) {
+            mob.setVelocity(mob.getVelocity().multiply(0.5));
+            return;
+        }
+
+        // 障害物で詰むなら少し上へ（超簡易回避）
+        Vec3d from = pos.add(0, mob.getHeight() * 0.6, 0);
+        BlockHitResult hit = sw.raycast(new RaycastContext(
+                from, desired,
+                RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE,
+                mob
+        ));
+        if (hit.getType() == HitResult.Type.BLOCK) {
+            desired = desired.add(0, 1.0, 0);
+            to = desired.subtract(pos);
+            dist = to.length();
+            if (dist < 0.001) return;
+        }
+
+        Vec3d dir = to.normalize();
+
+        // 速度（近いと減速）
+        double spd = Math.min(speed * 1.2, 0.55);
+        if (dist < 3.0) spd *= (dist / 3.0);
+
+        // 現在速度を少し残して滑らかに
+        Vec3d vel = mob.getVelocity().multiply(0.6).add(dir.multiply(spd));
+
+        mob.setVelocity(vel);
+        mob.velocityDirty = true;
+        mob.fallDistance = 0;
+        mob.setOnGround(false);
     }
 }

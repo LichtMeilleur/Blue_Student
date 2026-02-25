@@ -1,0 +1,66 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.beam_loop": {
+			"animation_length": 1,
+			"bones": {
+				"sky_blue": {
+					"rotation": {
+						"0.0": {
+							"vector": [0, 0, 0]
+						},
+						"1.0": {
+							"vector": [0, 0, 322.5]
+						}
+					}
+				},
+				"sky_blue2": {
+					"rotation": {
+						"0.0": {
+							"vector": [0, 0, 0]
+						},
+						"1.0": {
+							"vector": [0, 0, -302.5]
+						}
+					}
+				}
+			}
+		},
+		"animation.beam": {
+			"animation_length": 0.5,
+			"bones": {
+				"root": {
+					"scale": {
+						"0.0": {
+							"vector": [1, 1, 0]
+						},
+						"0.4583": {
+							"vector": [1, 1, 1.2]
+						}
+					}
+				},
+				"sky_blue": {
+					"rotation": {
+						"0.0": {
+							"vector": [0, 0, 0]
+						},
+						"0.5": {
+							"vector": [0, 0, 322.5]
+						}
+					}
+				},
+				"sky_blue2": {
+					"rotation": {
+						"0.0": {
+							"vector": [0, 0, 0]
+						},
+						"0.5": {
+							"vector": [0, 0, -302.5]
+						}
+					}
+				}
+			}
+		}
+	},
+	"geckolib_format_version": 2
+}

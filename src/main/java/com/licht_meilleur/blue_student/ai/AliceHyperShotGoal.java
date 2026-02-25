@@ -3,6 +3,7 @@ package com.licht_meilleur.blue_student.ai;
 import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
 import com.licht_meilleur.blue_student.entity.AliceEntity;
 import com.licht_meilleur.blue_student.student.IStudentEntity;
+import com.licht_meilleur.blue_student.student.StudentForm;
 import com.licht_meilleur.blue_student.weapon.*;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.ai.goal.Goal;
@@ -35,6 +36,9 @@ public class AliceHyperShotGoal extends Goal {
 
     @Override
     public boolean canStart() {
+
+        if (mob.getForm() == StudentForm.BR) return false;
+
         if (mob.getWorld().isClient) return false;
 
         if (mob.isLifeLockedForGoal()) return false;

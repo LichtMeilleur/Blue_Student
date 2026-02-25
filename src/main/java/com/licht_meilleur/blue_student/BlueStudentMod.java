@@ -1,8 +1,10 @@
 package com.licht_meilleur.blue_student;
 
 import com.licht_meilleur.blue_student.bed.BedLinkEvents;
+import com.licht_meilleur.blue_student.block.CraftChamberBlock;
 import com.licht_meilleur.blue_student.block.OnlyBedBlock;
 import com.licht_meilleur.blue_student.block.TabletBlock;
+import com.licht_meilleur.blue_student.block.entity.CraftChamberBlockEntity;
 import com.licht_meilleur.blue_student.block.entity.OnlyBedBlockEntity;
 import com.licht_meilleur.blue_student.block.entity.TabletBlockEntity;
 import com.licht_meilleur.blue_student.entity.*;
@@ -10,6 +12,7 @@ import com.licht_meilleur.blue_student.entity.*;
 import com.licht_meilleur.blue_student.entity.projectile.StudentBulletEntity;
 import com.licht_meilleur.blue_student.item.OnlyBedItem;
 import com.licht_meilleur.blue_student.network.ModPackets;
+import com.licht_meilleur.blue_student.registry.ModEntities;
 import com.licht_meilleur.blue_student.registry.ModScreenHandlers;
 import com.licht_meilleur.blue_student.student.StudentId;
 import net.fabricmc.api.ModInitializer;
@@ -147,11 +150,27 @@ public class BlueStudentMod implements ModInitializer {
             new BlockItem(TABLET_BLOCK, new Item.Settings().maxCount(64))
     );
 
+    public static final Block CRAFT_CHAMBER_BLOCK = Registry.register(
+            Registries.BLOCK, id("craft_chamber"),
+            new CraftChamberBlock(AbstractBlock.Settings.create().strength(1.0f).nonOpaque())
+    );
+
+    public static final Item CRAFT_CHAMBER_ITEM = Registry.register(
+            Registries.ITEM, id("craft_chamber"),
+            new BlockItem(CRAFT_CHAMBER_BLOCK, new Item.Settings().maxCount(64))
+    );
+
     // BlockEntityType
     public static final BlockEntityType<TabletBlockEntity> TABLET_BE = Registry.register(
             Registries.BLOCK_ENTITY_TYPE,
             new Identifier(MOD_ID, "tablet"),
             BlockEntityType.Builder.create(TabletBlockEntity::new, TABLET_BLOCK).build(null)
+    );
+
+    public static final BlockEntityType<CraftChamberBlockEntity> CRAFT_CHAMBER_BE = Registry.register(
+            Registries.BLOCK_ENTITY_TYPE,
+            new Identifier(MOD_ID, "craft_chamber"),
+            BlockEntityType.Builder.create(CraftChamberBlockEntity::new, CRAFT_CHAMBER_BLOCK).build(null)
     );
 
 
@@ -173,6 +192,7 @@ public class BlueStudentMod implements ModInitializer {
     public void onInitialize() {
         System.out.println("[BlueStudent] onInitialize start");
         LOGGER.info("[BlueStudent] onInitialize start");
+        ModEntities.register();
 
         FabricDefaultAttributeRegistry.register(SHIROKO, AbstractStudentEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(HOSHINO, AbstractStudentEntity.createAttributes());

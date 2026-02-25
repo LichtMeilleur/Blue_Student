@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "blue_student:block/craft_chamber", "y": 0 },
+    "facing=south": { "model": "blue_student:block/craft_chamber", "y": 180 },
+    "facing=west":  { "model": "blue_student:block/craft_chamber", "y": 90 },
+    "facing=east":  { "model": "blue_student:block/craft_chamber", "y": 270 }
+  }
+}

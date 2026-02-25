@@ -2,6 +2,8 @@ package com.licht_meilleur.blue_student.client.student_model;
 
 import com.licht_meilleur.blue_student.BlueStudentMod;
 import com.licht_meilleur.blue_student.entity.AliceEntity;
+import com.licht_meilleur.blue_student.entity.HoshinoEntity;
+import com.licht_meilleur.blue_student.student.StudentForm;
 import net.minecraft.util.Identifier;
 import software.bernie.geckolib.constant.DataTickets;
 import software.bernie.geckolib.core.animatable.model.CoreGeoBone;
@@ -13,17 +15,26 @@ public class AliceModel extends GeoModel<AliceEntity> {
 
     @Override
     public Identifier getModelResource(AliceEntity animatable) {
-        return new Identifier(BlueStudentMod.MOD_ID, "geo/alice.geo.json");
+        if (animatable.getForm() == StudentForm.BR) {
+            return BlueStudentMod.id("geo/alice_br.geo.json");
+        }
+        return BlueStudentMod.id("geo/alice.geo.json");
     }
 
     @Override
     public Identifier getTextureResource(AliceEntity animatable) {
-        return new Identifier(BlueStudentMod.MOD_ID, "textures/entity/alice.png");
+        if (animatable.getForm() == StudentForm.BR) {
+            return BlueStudentMod.id("textures/entity/alice_br.png");
+        }
+        return BlueStudentMod.id("textures/entity/alice.png");
     }
 
     @Override
     public Identifier getAnimationResource(AliceEntity animatable) {
-        return new Identifier(BlueStudentMod.MOD_ID, "animations/alice.animation.json");
+        if (animatable.getForm() == StudentForm.BR) {
+            return BlueStudentMod.id("animations/alice_br.animation.json");
+        }
+        return BlueStudentMod.id("animations/alice.animation.json");
     }
 
     @Override

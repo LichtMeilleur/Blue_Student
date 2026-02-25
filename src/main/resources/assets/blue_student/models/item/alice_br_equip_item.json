@@ -1,0 +1,6 @@
+{
+	"parent": "minecraft:item/generated",
+	"textures": {
+		"layer0": "blue_student:item/alice_br_equip_item"
+	}
+}

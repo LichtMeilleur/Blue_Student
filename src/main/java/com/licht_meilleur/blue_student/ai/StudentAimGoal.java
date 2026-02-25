@@ -220,12 +220,16 @@ public class StudentAimGoal extends Goal {
         if (mob instanceof AbstractStudentEntity ase) {
             form = ase.getForm();
         }
-
+// ch はこの少し上で定義してる fireChannel を使う
         final IStudentEntity.FireChannel ch = fireChannel;
         final boolean isSubShot = (ch != IStudentEntity.FireChannel.MAIN);
 
-// まずは既存APIに合わせてbooleanで渡す（SUB_L/SUB_Rはどちらもsub扱い）
-        final WeaponSpec spec = WeaponSpecs.forStudent(student.getStudentId(), form, IStudentEntity.FireChannel.SUB_L);
+
+
+
+// ★ここを修正
+        final WeaponSpec spec =
+                WeaponSpecs.forStudent(student.getStudentId(), form, fireChannel);
 
 // 射程＆視界チェック
         double dist = mob.distanceTo(fireTarget);

@@ -257,11 +257,16 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     private int lookMoveDirTicks = 0;
 
 
-    // AbstractStudentEntity に追加（client側で使う）
-    private StudentBrAction lastBrActionClient = StudentBrAction.NONE;
-
 
     private int lastBrActionVerClient = -1;
+
+
+    // ===== BR animation hold (client-side) =====
+    private StudentBrAction lastBrActionClient = StudentBrAction.NONE;
+    private int brHoldTicksClient = 0;
+
+    // 何tickだけ「直前のBR action」を保持するか（好みで 2〜4）
+    protected int getBrActionHoldTicks() { return 3; }
 
 
 
@@ -445,6 +450,11 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                 if (kisakiSupportTicks == 0) {
                     applyKisakiSupportBuff(false, 0, 0, 0);
                 }
+            }
+
+            // ★クライアントだけ：BRアニメ保持tickを減らす
+            if (this.getWorld().isClient) {
+                if (brHoldTicksClient > 0) brHoldTicksClient--;
             }
 
 
@@ -1108,19 +1118,18 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
 
 
 
-
-        // ★BRでもSHOTトリガーで射撃アニメを出す
-        if (clientShotTicks > 0 || clientShotHoldTicks > 0) {
-            if (shotJustStarted) {
-                state.getController().forceAnimationReset();
-                shotJustStarted = false;
-            }
-            state.getController().setAnimation(SHOT);
-            return PlayState.CONTINUE;
-        }
-        // 次に BR action
         if (getForm() == StudentForm.BR) {
-            var a = getBrAction();
+
+            // ★BRアクションが変わったら必ずリセット（thenPlay再生保証）
+            int ver = this.dataTracker.get(BR_ACTION_VER);
+            if (ver != lastBrActionVerClient) {
+                lastBrActionVerClient = ver;
+                state.getController().forceAnimationReset();
+            }
+
+            StudentBrAction a = getBrActionForAnimationClient();
+
+            // ★hold>0 の間だけ BRアクションを再生
             if (a != StudentBrAction.NONE) {
                 RawAnimation brAnim = getBrAnimationForAction(a);
                 if (brAnim != null) {
@@ -1128,7 +1137,21 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                     return PlayState.CONTINUE;
                 }
             }
+
+            // ★BRアクション無しなら必ずロコモーションに落とす（空白防止）
+            state.getController().setAnimation(state.isMoving() ? RUN : IDLE);
+            return PlayState.CONTINUE;
         }
+
+        // ★BR中はSHOTトリガーを使わない（BR actionで表現する）
+        if (clientShotTicks > 0 || clientShotHoldTicks > 0) {
+            if (getForm() != StudentForm.BR) {
+                state.getController().setAnimation(SHOT);
+                return PlayState.CONTINUE;
+            }
+            // BR中はアニメを変えないが、ここで return しない
+        }
+
 
 
 
@@ -1225,6 +1248,15 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     public Vec3d getClientSubMuzzleWorldPosOrApprox() {
         return (clientSubMuzzleWorldPos != null) ? clientSubMuzzleWorldPos : getClientMuzzleWorldPosOrApprox();
     }
+    @Environment(EnvType.CLIENT)
+    private Vec3d clientLeftSubMuzzleWorldPos = null;
+    @Environment(EnvType.CLIENT)
+    public void setClientLeftSubMuzzleWorldPos(Vec3d pos) { this.clientLeftSubMuzzleWorldPos = pos; }
+
+    @Environment(EnvType.CLIENT)
+    private Vec3d clientRightSubMuzzleWorldPos = null;
+    @Environment(EnvType.CLIENT)
+    public void setClientRightSubMuzzleWorldPos(Vec3d pos) { this.clientRightSubMuzzleWorldPos = pos; }
 
     // ===== movement tweak =====
     @Override
@@ -2188,10 +2220,7 @@ private void tickFormFromEquipment() {
         if (target == null) return;
         if (ch == null) ch = IStudentEntity.FireChannel.MAIN;
 
-        // 「両立させない」方針なら：他チャンネルを消す
-        // 交互撃ち/暴発が嫌ならこのままでOK
-        queuedFire.clear();
-
+        // ★clearしない：該当chだけ上書き
         queuedFire.put(ch, target.getUuid());
     }
 
@@ -2232,12 +2261,26 @@ private void tickFormFromEquipment() {
     public void requestBrAction(StudentBrAction action, int holdTicks) {
         if (this.getWorld().isClient) return;
 
-        this.dataTracker.set(BR_ACTION_ID, action.ordinal());
-        this.dataTracker.set(BR_ACTION_HOLD, Math.max(0, holdTicks));
+        int newId = action.ordinal();
+        int curId = this.dataTracker.get(BR_ACTION_ID);
+        int curHold = this.dataTracker.get(BR_ACTION_HOLD);
 
-        // ★毎回バージョンを進める（同じactionでもアニメを再スタートさせるため）
-        int v = this.dataTracker.get(BR_ACTION_VER);
-        this.dataTracker.set(BR_ACTION_VER, v + 1);
+        // ID更新
+        if (curId != newId) {
+            this.dataTracker.set(BR_ACTION_ID, newId);
+        }
+
+        // hold更新（減る分はGoal側が管理してるので、ここは「最大」を入れておくと安定）
+        int nextHold = Math.max(0, holdTicks);
+        this.dataTracker.set(BR_ACTION_HOLD, Math.max(curHold, nextHold));
+
+        // ★VERを進める条件：
+        // - アクションが変わった時
+        // - もしくは「新しく開始」(holdが増えた時) だけ
+        if (curId != newId || nextHold > curHold) {
+            int v = this.dataTracker.get(BR_ACTION_VER);
+            this.dataTracker.set(BR_ACTION_VER, v + 1);
+        }
     }
 
     public int getBrActionVersion() {
@@ -2363,6 +2406,21 @@ private void tickFormFromEquipment() {
 
         return false;
     }
+    protected StudentBrAction getBrActionForAnimationClient() {
+        // ★holdが0なら「アクション無し」とみなす（ID残留による空白再生を防ぐ）
+        int hold = this.dataTracker.get(BR_ACTION_HOLD);
+        if (hold <= 0) {
+            // clientの“最後の少し保持”をやるならここ（任意）
+            if (brHoldTicksClient > 0) return lastBrActionClient;
+            return StudentBrAction.NONE;
+        }
 
+        StudentBrAction a = getBrAction(); // BR_ACTION_ID
+        if (a == null) return StudentBrAction.NONE;
+
+        lastBrActionClient = a;
+        brHoldTicksClient = getBrActionHoldTicks(); // 任意
+        return a;
+    }
 
 }

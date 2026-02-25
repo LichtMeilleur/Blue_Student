@@ -78,14 +78,14 @@ public class StudentRenderer<T extends AbstractStudentEntity> extends GeoEntityR
             animatable.setClientSubMuzzleWorldPos(w);
         }
 
-        Vec3d sub_L_Local = tryGetLocatorLocalPos(bone, "Left_sub_muzzle");
+        Vec3d sub_L_Local = tryGetLocatorLocalPos(bone, "left_sub_muzzle");
         if (sub_L_Local != null) {
             Vec3d w = worldPosFromCurrentMatrix(poseStack,
                     (float) (sub_L_Local.x / 16.0),
                     (float) (sub_L_Local.y / 16.0),
                     (float) (sub_L_Local.z / 16.0)
             );
-            animatable.setclientLeftSubMuzzleWorldPos(w);
+            animatable.setClientLeftSubMuzzleWorldPos(w);
         }
 
         Vec3d sub_R_Local = tryGetLocatorLocalPos(bone, "right_sub_muzzle");
@@ -95,7 +95,7 @@ public class StudentRenderer<T extends AbstractStudentEntity> extends GeoEntityR
                     (float) (sub_R_Local.y / 16.0),
                     (float) (sub_R_Local.z / 16.0)
             );
-            animatable.setclientRightSubMuzzleWorldPos(w);
+            animatable.setClientRightSubMuzzleWorldPos(w);
         }
 
         super.renderRecursively(poseStack, animatable, bone, renderLayer, bufferSource, buffer,

@@ -12,7 +12,7 @@ public final class StudentEquipments {
         return switch (sid) {
             case HOSHINO -> BlueStudentMod.id("textures/gui/hoshino_br_equip_item.png");
             // ALICE 未実装なら empty に落とす
-            // case ALICE -> BlueStudentMod.id("textures/gui/alice_br_equip_item.png");
+             case ALICE -> BlueStudentMod.id("textures/gui/alice_br_equip_item.png");
             default -> BlueStudentMod.id("textures/gui/empty_br.png");
         };
     }
@@ -21,7 +21,7 @@ public final class StudentEquipments {
     public static boolean supportsBr(StudentId sid) {
         return switch (sid) {
             case HOSHINO -> true;
-            //case ALICE -> true; // アリスBR出来たらON
+            case ALICE -> true; // アリスBR出来たらON
             default -> false;
         };
     }

@@ -1333,7 +1333,7 @@
 			}
 		},
 		"animation.model.hyper_cannon_set": {
-			"animation_length": 0.25,
+			"animation_length": 0.375,
 			"bones": {
 				"LeftForeArm": {
 					"rotation": {
@@ -1550,7 +1550,7 @@
 				}
 			}
 		},
-		"animation.model.left_move_shot": {
+		"animation.model.right_move_shot": {
 			"animation_length": 0.0833,
 			"bones": {
 				"MAllBody": {
@@ -1697,7 +1697,7 @@
 				}
 			}
 		},
-		"animation.model.left_move": {
+		"animation.model.right_move": {
 			"animation_length": 0.0833,
 			"bones": {
 				"MAllBody": {
@@ -1828,7 +1828,7 @@
 				}
 			}
 		},
-		"animation.model.right_move_shot": {
+		"animation.model.left_move_shot": {
 			"animation_length": 0.0833,
 			"bones": {
 				"MAllBody": {
@@ -1970,7 +1970,7 @@
 				}
 			}
 		},
-		"animation.model.right_move": {
+		"animation.model.left_move": {
 			"animation_length": 0.0833,
 			"bones": {
 				"MAllBody": {

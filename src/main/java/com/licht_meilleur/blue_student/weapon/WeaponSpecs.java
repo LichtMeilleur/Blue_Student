@@ -64,7 +64,7 @@ public class WeaponSpecs {
     // BR（ホシノ）
     // =========================
     private static final WeaponSpec HOSHINO_BR_MAIN = WeaponSpec.projectile(
-            12, 10, 3.5f, 2.2f, 0.22f, 8, 0.9f, true,
+            12, 10, 3.5f, 2.2f, 0.22f, 8, 1.5f, true,
             2.5, 8.0,
             5, 35, 0, 4.0, false,
             WeaponSpec.FxType.SHOTGUN, 3.0f, 12,WeaponSpec.MuzzleLocator.MUZZLE

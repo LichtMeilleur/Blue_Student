@@ -66,7 +66,7 @@ public enum StudentId implements StringIdentifiable {
     public boolean hasBrForm() {
         return switch (this) {
             case HOSHINO -> true;
-            case ALICE -> false; // まだなら false
+            case ALICE -> true; // まだなら false
             default -> false;
         };
     }

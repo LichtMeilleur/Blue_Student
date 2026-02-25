@@ -10,15 +10,16 @@ import com.licht_meilleur.blue_student.weapon.WeaponSpecs;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.ai.FuzzyTargeting;
 import net.minecraft.entity.ai.goal.Goal;
+import net.minecraft.entity.ai.pathing.Path;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.PathAwareEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
-
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.List;
 
 public class HoshinoBrCombatGoal extends Goal {
 
@@ -56,31 +57,30 @@ public class HoshinoBrCombatGoal extends Goal {
     private int cdSub    = 0;
     private int cdSide   = 0;
 
-    // ===== SUB burst (3 shots) =====
-    private int subBurstLeft = 0;
-    private int subBurstCooldown = 0;
-    private boolean subFlip = false; // A/B 切り替えでアニメ再生を強制
-
-    // ===== single-shot scheduling =====
-    private boolean shotQueuedThisAction = false;
-
-    private int fireCooldown = 0;
-
-    private boolean subToggle = false;
-    private int subBurstCd = 0;
-
+    // ===== side dash =====
     private int sideDashTicksLeft = 0;
     private Vec3d sideDashVel = Vec3d.ZERO;
 
+    // ===== hit react =====
     private int lastHurtTime = 0;
 
+    // ===== melee =====
     private boolean meleeHitDone = false;
 
     // ★アニメを流し切るまで割り込み禁止にするロック
     private int actionLockTicks = 0;
     private int hitReactCooldown = 0;
 
+    // ===== wall-hug対策 =====
+    private int noSeeTicks = 0;
+    private static final int DROP_TARGET_NOSEE_TICKS = 35; // 見えない状態が続いたらターゲット捨てる
+    private static final int REACQUIRE_INTERVAL = 10;      // 何tickごとに再探索するか
 
+    // ===== SUB 3点バースト（sub_shot3 / sub_reload_shot3 の発射タイミング）=====
+    // 2,6,10tick で3発（必要ならここを調整）
+    private static final int[] SUB_BURST_TICKS = new int[]{0, 4, 8};
+
+    private double prevDist = 9999.0;
 
     public HoshinoBrCombatGoal(PathAwareEntity mob, IStudentEntity student) {
         this.mob = mob;
@@ -100,7 +100,7 @@ public class HoshinoBrCombatGoal extends Goal {
         StudentAiMode mode = student.getAiMode();
         if (mode != StudentAiMode.FOLLOW && mode != StudentAiMode.SECURITY) return false;
 
-        target = findTarget();
+        target = findTargetPreferVisibleAndPath();
         if (target != null) mob.setTarget(target);
         return target != null;
     }
@@ -127,10 +127,15 @@ public class HoshinoBrCombatGoal extends Goal {
         stopAction();
         mob.getNavigation().stop();
 
-        subBurstLeft = 0;
-        subBurstCooldown = 0;
-        subFlip = false;
-        shotQueuedThisAction = false;
+        sideDashTicksLeft = 0;
+        sideDashVel = Vec3d.ZERO;
+        meleeHitDone = false;
+        actionLockTicks = 0;
+        hitReactCooldown = 0;
+        lastHurtTime = 0;
+
+        noSeeTicks = 0;
+        prevDist = 9999.0;
     }
 
     @Override
@@ -140,20 +145,18 @@ public class HoshinoBrCombatGoal extends Goal {
         mob.getNavigation().stop();
         stopAction();
         clearCds();
+        noSeeTicks = 0;
+        prevDist = 9999.0;
     }
 
     @Override
     public void tick() {
-        if (!(mob.getWorld() instanceof ServerWorld)) return;
-
-
+        if (!(mob.getWorld() instanceof ServerWorld sw)) return;
 
         tickCds();
         if (hitReactCooldown > 0) hitReactCooldown--;
-        if (fireCooldown > 0) fireCooldown--;
         if (repathCooldown > 0) repathCooldown--;
         if (cdSide > 0) cdSide--;
-        if (subBurstCooldown > 0) subBurstCooldown--;
         if (actionLockTicks > 0) actionLockTicks--;
 
         // target refresh
@@ -162,35 +165,59 @@ public class HoshinoBrCombatGoal extends Goal {
             mob.setTarget(target);
             mob.getNavigation().stop();
             stopAction();
+            prevDist = 9999.0; // ★追加
             return;
         }
 
         final double dist = mob.distanceTo(target);
         final boolean canSee = mob.getVisibilityCache().canSee(target);
 
+// ★境界跨ぎでDODGE発動（3→2に入った瞬間）
+        boolean crossedDodgeBand = (prevDist > 3.0 && dist <= 2.0);
+
+// 次tickのために保存（targetが変わる/死ぬ前に一旦入れてOK）
+        prevDist = dist;
+
+        if (crossedDodgeBand
+                && canSee                       // 任意（壁越しで発動しない）
+                && cdDodge <= 0
+                && actionLockTicks <= 0         // あなたのロック運用に合わせて
+                && hitReactCooldown <= 0        // 任意
+                && current != StudentBrAction.DODGE_SHOT) {
+
+            startAction(StudentBrAction.DODGE_SHOT);
+            return;
+        }
+
         final WeaponSpec mainSpec = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, IStudentEntity.FireChannel.MAIN);
         final WeaponSpec subSpec  = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, IStudentEntity.FireChannel.SUB_L);
 
+        // ===== wall-hug対策：見えない時間カウント =====
+        if (!canSee) noSeeTicks++;
+        else noSeeTicks = 0;
 
-        // ===== 被弾リアクションは最優先で割り込む =====
-        int ht = mob.hurtTime;
-        boolean gotHitThisTick = (ht > lastHurtTime);
-        lastHurtTime = ht;
+        // 見えない状態が続くなら「壁の向こうを追ってる」可能性が高いので捨てる
+        if (noSeeTicks >= DROP_TARGET_NOSEE_TICKS) {
+            target = findTargetPreferVisibleAndPath();
+            mob.setTarget(target);
+            mob.getNavigation().stop();
+            stopAction();
+            noSeeTicks = 0;
+            return;
+        }
 
-        boolean ignoreHitReact = (mob instanceof AbstractStudentEntity ase) && ase.shouldIgnoreHitReactNow();//赤文字
-// ★ロック中は被弾割り込みしない
-        if (gotHitThisTick && !ignoreHitReact && actionLockTicks <= 0 && hitReactCooldown <= 0) {
-            hitReactCooldown = 10;
-
-            if (dist <= BASH_RANGE && cdBash <= 0) {
-                startAction(StudentBrAction.GUARD_BASH);
-                return;
-            }
-            if (cdDodge <= 0) {
-                startAction(StudentBrAction.DODGE_SHOT);
-                return;
+        // 一定間隔で「より良い可視ターゲット」がいないか再探索（壁越し固定を弱める）
+        if (mob.age % REACQUIRE_INTERVAL == 0) {
+            LivingEntity better = findTargetPreferVisibleAndPath();
+            if (better != null && better != target) {
+                target = better;
+                mob.setTarget(target);
+                mob.getNavigation().stop();
+                stopAction();
+                // ここでreturnしない（同tickで次行動に行ってOK）
             }
         }
+
 
 
         // リロード進行（メイン）
@@ -208,15 +235,12 @@ public class HoshinoBrCombatGoal extends Goal {
             return;
         }
 
-// ★DODGEが終わるまで次行動に遷移しない（保険）
-        if (current == StudentBrAction.DODGE_SHOT && actionLockTicks > 0) {
-            return;
-        }
-
-// ★ここが肝：ロック中なら「何もしない」（次アクション開始禁止）
+        // ★重要：ロック中は「今のcurrentを握り続ける」→ アニメ空白tickを作らない
         if (actionLockTicks > 0) {
+            if (current != StudentBrAction.NONE) {
+                student.requestBrAction(current, 2);
+            }
             mob.getNavigation().stop();
-            student.requestBrAction(StudentBrAction.IDLE, 2); // 何も無ければIDLEでOK（好み）
             return;
         }
 
@@ -224,7 +248,7 @@ public class HoshinoBrCombatGoal extends Goal {
         if (!mainSpec.infiniteAmmo && student.getAmmoInMag() <= 0) {
             if (dist < EVADE_DIST) {
                 moveAwayFromTarget(SPEED_CHASE);
-                student.requestBrAction(StudentBrAction.IDLE, 2);
+                stopAction(); // ★移動runを優先（BR actionを握らない）
                 return;
             } else {
                 if (!student.isReloading()) student.startReload(mainSpec);
@@ -233,34 +257,45 @@ public class HoshinoBrCombatGoal extends Goal {
             }
         }
 
+        // ===== 見えない：壁に張り付かないよう “横にずれる” を優先 =====
+        if (!canSee) {
+            // 近いのに見えない＝壁越しの可能性が高い → 側方へずれて視界を探す
+            if (dist < 6.0) {
+                moveSideToFindLoS();
+            } else {
+                moveTowardTarget(SPEED_AIM);
+            }
+            stopAction();
+            return;
+        }
+
+        // ===== 遠い：接近（BR actionは握らず run に任せる）=====
+        if (dist >= APPROACH_IF_OVER) {
+            moveTowardTarget(SPEED_CHASE);
+            stopAction();
+            return;
+        }
+
         // ===== 次アクション決定 =====
-        StudentBrAction next = selectByDistance(dist, canSee, mainSpec);
+        StudentBrAction next = selectByDistance(dist, mainSpec);
+
+        if (next == StudentBrAction.NONE) {
+            stopAction();
+            return;
+        }
 
         startAction(next);
     }
 
-    private StudentBrAction selectByDistance(double dist, boolean canSee, WeaponSpec mainSpec) {
-        if (mob.age % 20 == 0) {
-            System.out.println("[BR] dist=" + dist
-                    + " hurtTime=" + mob.hurtTime
-                    + " cdTackle=" + cdTackle
-                    + " cdBash=" + cdBash
-                    + " cdDodge=" + cdDodge);
-        }
+    private StudentBrAction selectByDistance(double dist, WeaponSpec mainSpec) {
 
         // ★接近用タックル（遠距離から詰める）
         if (dist > SHOTGUN_MAX && dist <= 12.0 && cdTackle <= 0) return StudentBrAction.GUARD_TACKLE;
-
-        if (!canSee) return StudentBrAction.IDLE;
-
-
 
         if (dist <= TACKLE_RANGE && cdTackle <= 0) return StudentBrAction.GUARD_TACKLE;
         if (dist <= BASH_RANGE   && cdBash   <= 0) return StudentBrAction.GUARD_BASH;
 
         if (dist <= EVADE_DIST && cdDodge <= 0) return StudentBrAction.DODGE_SHOT;
-
-        if (dist >= APPROACH_IF_OVER) return StudentBrAction.IDLE;
 
         // サイド（ショットガン距離帯でたまに）
         if (dist >= SHOTGUN_MIN && dist <= SHOTGUN_MAX) {
@@ -269,48 +304,38 @@ public class HoshinoBrCombatGoal extends Goal {
             }
         }
 
-        // リロード中はSUBで繋ぐ（3連射）
+        // リロード中はSUBで繋ぐ（3点バースト）
         if (student.isReloading()) return StudentBrAction.SUB_RELOAD_SHOT;
 
-        // ショットガン距離：MAIN（単発を確実に撃つ）
+        // ショットガン距離：MAIN / SUB
         if (dist >= SHOTGUN_MIN && dist <= SHOTGUN_MAX) {
             if (cdMain <= 0) return StudentBrAction.MAIN_SHOT;
             if (cdSub <= 0)  return StudentBrAction.SUB_SHOT;
-            return StudentBrAction.IDLE;
+            return StudentBrAction.NONE;
         }
 
         // 近い/遠い：SUBで牽制
         if (cdSub <= 0) return StudentBrAction.SUB_SHOT;
-        return StudentBrAction.IDLE;
+
+        return StudentBrAction.NONE;
     }
 
     private void startAction(StudentBrAction a) {
         current = a;
         actionAge = 0;
-        shotQueuedThisAction = false;
         meleeHitDone = false;
 
-        // ★ここを戻す：行動の継続時間（runCurrentを回すために必須）
+        // ★長さはアニメに合わせる（sub_shot3が10tick目まで撃つので16でOK）
         actionHoldTicks = switch (a) {
             case GUARD_TACKLE, GUARD_BASH -> 10;
             case DODGE_SHOT               -> 17;
-            case MAIN_SHOT                -> 6;   // 3でもOK
+            case MAIN_SHOT                -> 6;
             case SUB_SHOT, SUB_RELOAD_SHOT -> 16;
             case LEFT_SIDE_SUB_SHOT, RIGHT_SIDE_SUB_SHOT -> 10;
-            case IDLE -> 6;
             default -> 6;
         };
 
-        // SUB burst準備
-        if (a == StudentBrAction.SUB_SHOT || a == StudentBrAction.SUB_RELOAD_SHOT) {
-            subBurstLeft = 3;
-            subBurstCd = 0;
-        } else {
-            subBurstLeft = 0;
-            subBurstCd = 0;
-        }
-
-        // ★割り込みロック（これはあなたのままでOK）
+        // ★割り込みロック（DODGEなどを守る）
         actionLockTicks = switch (a) {
             case DODGE_SHOT -> 17;
             case GUARD_TACKLE, GUARD_BASH -> 10;
@@ -335,38 +360,29 @@ public class HoshinoBrCombatGoal extends Goal {
         current = StudentBrAction.NONE;
         actionHoldTicks = 0;
         actionAge = 0;
-        subBurstLeft = 0;
-        subBurstCooldown = 0;
-        shotQueuedThisAction = false;
+        meleeHitDone = false;
     }
 
     private void runCurrent(StudentBrAction a, double dist, boolean canSee, WeaponSpec mainSpec, WeaponSpec subSpec) {
         if (target != null) student.requestLookTarget(target, 80, 2);
 
+        // 見えない時は「攻撃アクション中でも」移動だけ（無理に壁に撃たない）
         if (!canSee) {
-            moveTowardTarget(SPEED_AIM);
+            if (dist < 6.0) moveSideToFindLoS();
+            else moveTowardTarget(SPEED_AIM);
             return;
         }
 
-
         switch (a) {
-            case IDLE -> {
-                if (dist >= APPROACH_IF_OVER || dist > SHOTGUN_MAX) moveTowardTarget(SPEED_CHASE);
-                else if (dist < EVADE_DIST) moveAwayFromTarget(SPEED_CHASE);
-                else mob.getNavigation().stop();
-            }
-
             case GUARD_TACKLE -> {
                 mob.getNavigation().stop();
 
-                // ★突進：最初の 4tick だけ前方へ（2〜3ブロック程度に収める）
+                // 突進：最初の 4tick だけ前方へ
                 if (actionAge <= 4) {
                     Vec3d to = target.getPos().subtract(mob.getPos());
                     Vec3d flat = new Vec3d(to.x, 0, to.z);
                     if (flat.lengthSquared() > 1.0e-6) {
                         Vec3d dir = flat.normalize();
-
-                        // 速度を下げる：0.55〜0.75 くらい（4tickなら 2〜3ブロック感）
                         double dashSpeed = 0.65;
                         mob.setVelocity(dir.x * dashSpeed, mob.getVelocity().y, dir.z * dashSpeed);
                         mob.velocityDirty = true;
@@ -377,14 +393,12 @@ public class HoshinoBrCombatGoal extends Goal {
                     }
                 }
 
-                // ★ヒット判定：1回だけ
-                if (!meleeHitDone && canSee && isTouchingTarget(1.05)) {
+                // 命中判定：距離＋tick窓（通り抜け対策）
+                if (!meleeHitDone && actionAge >= 2 && actionAge <= 8 && isInMeleeRange(2.6)) {
                     meleeHitDone = true;
 
-                    // ダメージ
                     target.damage(mob.getDamageSources().mobAttack(mob), 6.0f);
 
-                    // ノックバック（相手を押し出す）
                     Vec3d to = target.getPos().subtract(mob.getPos());
                     Vec3d flat = new Vec3d(to.x, 0, to.z);
                     if (flat.lengthSquared() > 1.0e-6) {
@@ -393,11 +407,11 @@ public class HoshinoBrCombatGoal extends Goal {
                     }
                 }
             }
+
             case GUARD_BASH -> {
                 mob.getNavigation().stop();
 
-                // バッシュは移動しない（見た目が安定）
-                if (!meleeHitDone && canSee && isTouchingTarget(1.20)) {
+                if (!meleeHitDone && actionAge >= 1 && actionAge <= 6 && isInMeleeRange(2.8)) {
                     meleeHitDone = true;
 
                     target.damage(mob.getDamageSources().mobAttack(mob), 4.0f);
@@ -406,7 +420,7 @@ public class HoshinoBrCombatGoal extends Goal {
                     Vec3d flat = new Vec3d(to.x, 0, to.z);
                     if (flat.lengthSquared() > 1.0e-6) {
                         Vec3d dir = flat.normalize();
-                        target.takeKnockback(1.6, dir.x, dir.z); // ★強め
+                        target.takeKnockback(1.6, dir.x, dir.z);
                     }
                 }
             }
@@ -414,7 +428,7 @@ public class HoshinoBrCombatGoal extends Goal {
             case DODGE_SHOT -> {
                 mob.getNavigation().stop();
 
-                if (actionAge <= 6) { // ★最初だけ後退を固定
+                if (actionAge <= 6) {
                     Vec3d away = mob.getPos().subtract(target.getPos());
                     Vec3d flat = new Vec3d(away.x, 0, away.z);
                     if (flat.lengthSquared() > 1.0e-6) {
@@ -429,17 +443,16 @@ public class HoshinoBrCombatGoal extends Goal {
                     }
                 }
 
-                queueSingleShotAtTick(false, mainSpec, 4);
+                queueSingleShotAtTick(false, mainSpec, 1);
             }
-
 
             case MAIN_SHOT -> {
                 mob.getNavigation().stop();
-                queueSingleShotAtTick(false, mainSpec, 0); // ★即発射
+                queueSingleShotAtTick(false, mainSpec, 0);
             }
 
             case RIGHT_SIDE_SUB_SHOT -> {
-                if (actionAge == 0) startSideStepDash(false, 1.05, 2); // ★速く・短く
+                if (actionAge == 0) startSideStepDash(false, 1.05, 2);
                 tickSideDash();
                 queueSingleShotAtTick(true, subSpec, 1);
             }
@@ -452,62 +465,50 @@ public class HoshinoBrCombatGoal extends Goal {
 
             case SUB_SHOT, SUB_RELOAD_SHOT -> {
                 mob.getNavigation().stop();
-                System.out.println("[SUB] queued subBurstLeft=" + subBurstLeft + " cd=" + subBurstCd);
-                tickSubBurst(subSpec);   // ★これがないと一生撃たない
+
+                // ★2,6,10tick で3発（sub_shot3 / sub_reload_shot3）
+                for (int t : SUB_BURST_TICKS) {
+                    queueBurstShotAtExactTick(true, subSpec, t);
+                }
             }
 
-            default -> mob.getNavigation().stop();
+            default -> {
+                mob.getNavigation().stop();
+            }
         }
     }
 
     private void queueSingleShotAtTick(boolean isSub, WeaponSpec spec, int triggerTick) {
         if (target == null || !target.isAlive()) return;
-        if (shotQueuedThisAction) return;
         if (actionAge < triggerTick) return;
 
         if (!isSub) {
             if (student.hasQueuedFire(IStudentEntity.FireChannel.MAIN)) return;
             student.queueFire(target, IStudentEntity.FireChannel.MAIN);
             cdMain = Math.max(cdMain, spec.cooldownTicks);
-            shotQueuedThisAction = true;
             return;
         }
 
-        // ===== SUB =====
-        IStudentEntity.FireChannel ch;
-
-        // サイドは固定
-        if (current == StudentBrAction.LEFT_SIDE_SUB_SHOT) ch = IStudentEntity.FireChannel.SUB_L;
-        else if (current == StudentBrAction.RIGHT_SIDE_SUB_SHOT) ch = IStudentEntity.FireChannel.SUB_R;
-        else {
-            // 通常SUBは交互
-            subFlip = !subFlip;
-            ch = subFlip ? IStudentEntity.FireChannel.SUB_L : IStudentEntity.FireChannel.SUB_R;
-        }
+        // ★ホシノは SUB_L 固定（sub_muzzle）
+        IStudentEntity.FireChannel ch = IStudentEntity.FireChannel.SUB_L;
 
         if (student.hasQueuedFire(ch)) return;
         student.queueFire(target, ch);
         cdSub = Math.max(cdSub, spec.cooldownTicks);
-
-        shotQueuedThisAction = true;
     }
 
-    private void tickSubBurst(WeaponSpec subSpec) {
+    // ★固定tickでだけ1発キューする（同一tickで多重に積まないため "==" を使う）
+    private void queueBurstShotAtExactTick(boolean isSub, WeaponSpec spec, int exactTick) {
         if (target == null || !target.isAlive()) return;
-        if (subBurstLeft <= 0) return;
+        if (actionAge != exactTick) return;
 
-        if (subBurstCd > 0) { subBurstCd--; return; }
-
-        // 交互
-        subFlip = !subFlip;
-        IStudentEntity.FireChannel ch = subFlip ? IStudentEntity.FireChannel.SUB_L : IStudentEntity.FireChannel.SUB_R;
-
+        IStudentEntity.FireChannel ch = isSub ? IStudentEntity.FireChannel.SUB_L : IStudentEntity.FireChannel.MAIN;
         if (student.hasQueuedFire(ch)) return;
 
         student.queueFire(target, ch);
-        subBurstLeft--;
 
-        subBurstCd = Math.max(1, subSpec.cooldownTicks);
+        if (isSub) cdSub = Math.max(cdSub, spec.cooldownTicks);
+        else       cdMain = Math.max(cdMain, spec.cooldownTicks);
     }
 
     // ===== Movement =====
@@ -533,6 +534,31 @@ public class HoshinoBrCombatGoal extends Goal {
         mob.getNavigation().startMovingTo(fuzzy.x, fuzzy.y, fuzzy.z, speed);
     }
 
+    // ★見えない時：横にずれてLoSを探す（壁張り付き軽減）
+    private void moveSideToFindLoS() {
+        if (repathCooldown > 0) return;
+        repathCooldown = REPATH_INTERVAL;
+
+        if (target == null) return;
+
+        Vec3d to = target.getPos().subtract(mob.getPos());
+        Vec3d flat = new Vec3d(to.x, 0, to.z);
+        if (flat.lengthSquared() < 1.0e-6) return;
+
+        Vec3d dir = flat.normalize();
+        boolean left = mob.getRandom().nextBoolean();
+        Vec3d side = left ? new Vec3d(-dir.z, 0, dir.x) : new Vec3d(dir.z, 0, -dir.x);
+
+        // 2.5〜4.0ブロック横にずれる
+        double len = 2.5 + mob.getRandom().nextDouble() * 1.5;
+        Vec3d desired = mob.getPos().add(side.normalize().multiply(len));
+
+        Vec3d fuzzy = FuzzyTargeting.findFrom(mob, 10, 6, desired);
+        if (fuzzy == null) fuzzy = desired;
+
+        mob.getNavigation().startMovingTo(fuzzy.x, fuzzy.y, fuzzy.z, SPEED_AIM);
+    }
+
     private void startSideStepDash(boolean left, double horizSpeed, int dashTicks) {
         if (target == null) return;
 
@@ -555,11 +581,9 @@ public class HoshinoBrCombatGoal extends Goal {
         }
     }
 
-    // 毎tick呼ぶ（runCurrent の side case の先頭で呼ぶ）
     private void tickSideDash() {
         if (sideDashTicksLeft <= 0) return;
 
-        // ★毎tick速度を維持 → “シュッ”
         mob.setVelocity(sideDashVel.x, mob.getVelocity().y, sideDashVel.z);
         mob.velocityDirty = true;
 
@@ -581,18 +605,67 @@ public class HoshinoBrCombatGoal extends Goal {
     }
 
     // ===== target =====
+    // ★「見える敵」優先 + 「到達可能パス」優先
+    private LivingEntity findTargetPreferVisibleAndPath() {
+        WeaponSpec main = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, IStudentEntity.FireChannel.MAIN);
+        Box box = mob.getBoundingBox().expand(main.range + DETECT_EXTRA);
+
+        List<LivingEntity> list = mob.getWorld()
+                .getEntitiesByClass(LivingEntity.class, box, e -> e.isAlive() && e instanceof HostileEntity);
+
+        if (list.isEmpty()) return null;
+
+        // 1) 見えてる + パスある
+        LivingEntity best = list.stream()
+                .filter(e -> mob.getVisibilityCache().canSee(e))
+                .filter(this::hasPathTo)
+                .min(Comparator.comparingDouble(mob::squaredDistanceTo))
+                .orElse(null);
+        if (best != null) return best;
+
+        // 2) 見えてる（パスは問わない）
+        best = list.stream()
+                .filter(e -> mob.getVisibilityCache().canSee(e))
+                .min(Comparator.comparingDouble(mob::squaredDistanceTo))
+                .orElse(null);
+        if (best != null) return best;
+
+        // 3) パスある（見えなくても到達できるなら追う価値あり）
+        best = list.stream()
+                .filter(this::hasPathTo)
+                .min(Comparator.comparingDouble(mob::squaredDistanceTo))
+                .orElse(null);
+        if (best != null) return best;
+
+        // 4) 最後の手段：単純最寄り
+        return list.stream()
+                .min(Comparator.comparingDouble(mob::squaredDistanceTo))
+                .orElse(null);
+    }
+
+    private boolean hasPathTo(LivingEntity e) {
+        if (e == null) return false;
+        // findPathTo は重いのでターゲット探索時だけ使う（tickごとにやらない）
+        Path p = mob.getNavigation().findPathTo(e, 0);
+        if (p == null) return false;
+        // reachesTarget が false でも “壁越しで遠回り” はあるので、好みで true 限定でもOK
+        return true;
+    }
+
+    // ★近接は距離判定が安定
+    private boolean isInMeleeRange(double range) {
+        if (target == null) return false;
+        return mob.squaredDistanceTo(target) <= range * range;
+    }
     private LivingEntity findTarget() {
         WeaponSpec main = WeaponSpecs.forStudent(student.getStudentId(), StudentForm.BR, IStudentEntity.FireChannel.MAIN);
         Box box = mob.getBoundingBox().expand(main.range + DETECT_EXTRA);
+
         return mob.getWorld()
-                .getEntitiesByClass(LivingEntity.class, box, e -> e.isAlive() && e instanceof HostileEntity)
+                .getEntitiesByClass(LivingEntity.class, box,
+                        e -> e.isAlive() && e instanceof HostileEntity)
                 .stream()
                 .min(Comparator.comparingDouble(mob::squaredDistanceTo))
                 .orElse(null);
     }
-    private boolean isTouchingTarget(double expand) {
-        if (target == null) return false;
-        return mob.getBoundingBox().expand(expand).intersects(target.getBoundingBox());
-    }
-
 }

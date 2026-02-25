@@ -36,6 +36,11 @@ public class HoshinoEntity extends AbstractStudentEntity {
     public static final String ANIM_GUARD_WALK = "animation.model.guard_walk";//BRverでは使わない
     public static final String ANIM_GUARD_SHOT = "animation.model.guard_shot";
 
+    public static final String ANIM_BR_IDLE = "animation.model.idle"; // 既存idle流用でもOK
+    public static final String ANIM_BR_RUN  = "animation.model.run";  // 既存run流用でもOK
+
+    private static final RawAnimation BR_IDLE = RawAnimation.begin().thenLoop(ANIM_BR_IDLE);
+    private static final RawAnimation BR_RUN  = RawAnimation.begin().thenLoop(ANIM_BR_RUN);
     //BRver
     //バックステップしながらショットガンを撃つ　4tickで射撃
     public static final String ANIM_DODGE_SHOT = "animation.model.dodge_shot";
@@ -44,9 +49,9 @@ public class HoshinoEntity extends AbstractStudentEntity {
     //その場で盾でバッシュ　強吹き飛ばし
     public static final String ANIM_GUARD_BASH = "animation.model.guard_bash";
     //リロードしながら撃つアニメ　メインのショットガンのリロードを行いながらサブのハンドガンをうつ　静止
-    public static final String ANIM_SUB_RELOAD_SHOT = "animation.model.sub_reload_shot";
+    public static final String ANIM_SUB_RELOAD_SHOT = "animation.model.sub_reload_shot3";
     //リロード無しで撃つアニメ　サブのハンドガンの静止して撃つ
-    public static final String ANIM_SUB_SHOT = "animation.model.sub_shot";
+    public static final String ANIM_SUB_SHOT = "animation.model.sub_shot3";
     //側面にに回りながら撃つアニメ　前進しながら右方向or左方向に撃つイメージ　　2tickで射撃 体の向きは回避方向に向ける必要あり
     public static final String ANIM_RIGHT_SIDE_SUB_SHOT = "animation.model.right_side_sub_shot";
     public static final String ANIM_LEFT_SIDE_SUB_SHOT= "animation.model.left_side_sub_shot";
@@ -112,8 +117,12 @@ public class HoshinoEntity extends AbstractStudentEntity {
 
             case RIGHT_SIDE_SUB_SHOT -> RIGHT_SIDE_SUB_SHOT;
             case LEFT_SIDE_SUB_SHOT  -> LEFT_SIDE_SUB_SHOT;
-            case SUB_SHOT, SUB_SHOT_A, SUB_SHOT_B -> SUB_SHOT;
-            case SUB_RELOAD_SHOT, SUB_RELOAD_SHOT_A, SUB_RELOAD_SHOT_B -> SUB_RELOAD_SHOT;
+            case SUB_SHOT -> SUB_SHOT;
+            case SUB_RELOAD_SHOT -> SUB_RELOAD_SHOT;
+
+            // ★ここが重要
+            case IDLE -> BR_IDLE;
+
             default -> null;
         };
     }
@@ -359,11 +368,11 @@ public class HoshinoEntity extends AbstractStudentEntity {
     @Override
     public boolean damage(net.minecraft.entity.damage.DamageSource source, float amount) {
         boolean ok = super.damage(source, amount);
-        if (!this.getWorld().isClient) {
-            System.out.println("[DMG] ok=" + ok + " amount=" + amount
-                    + " src=" + source.getName()
-                    + " hp=" + this.getHealth());
-        }
+        //if (!this.getWorld().isClient) {
+          //  System.out.println("[DMG] ok=" + ok + " amount=" + amount
+            //        + " src=" + source.getName()
+            //        + " hp=" + this.getHealth());
+        //}
         return ok;
     }
 
