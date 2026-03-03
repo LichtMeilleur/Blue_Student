@@ -1,6 +1,8 @@
 package com.licht_meilleur.blue_student.entity;
 
 import com.licht_meilleur.blue_student.ai.*;
+import com.licht_meilleur.blue_student.ai.only.HinaAirCombatGoal;
+import com.licht_meilleur.blue_student.ai.only.HinaFlyGoal;
 import com.licht_meilleur.blue_student.bed.BedLinkManager;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
 import com.licht_meilleur.blue_student.student.StudentId;
@@ -14,7 +16,6 @@ import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
-import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
@@ -28,7 +29,6 @@ import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import java.util.UUID;
 import net.minecraft.entity.ai.pathing.BirdNavigation;
-import net.minecraft.entity.ai.control.FlightMoveControl;
 
 
 public class HinaEntity extends AbstractStudentEntity {

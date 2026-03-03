@@ -36,6 +36,9 @@ public class TabletScreen extends Screen {
         slots[2] = StudentId.HINA;
         slots[3] = StudentId.KISAKI;
         slots[4] = StudentId.ALICE;
+        slots[5] = StudentId.MARIE;
+        slots[6] = StudentId.HIKARI;
+        slots[7] = StudentId.NOZOMI;
     }
 
     public static void open(BlockPos tabletPos) {

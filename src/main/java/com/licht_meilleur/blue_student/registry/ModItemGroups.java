@@ -24,7 +24,7 @@ public class ModItemGroups {
                             entries.add(BlueStudentMod.CRAFT_CHAMBER_ITEM);
 
 
-
+                            entries.add(BlueStudentMod.TICKET);
                             entries.add(BlueStudentMod.HOSHINO_BR_EQUIP_ITEM);
                             entries.add(BlueStudentMod.ALICE_BR_EQUIP_ITEM);
                             // もし将来追加するならここに並べる

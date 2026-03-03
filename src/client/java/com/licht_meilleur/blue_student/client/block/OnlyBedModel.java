@@ -34,6 +34,9 @@ public class OnlyBedModel extends GeoModel<OnlyBedBlockEntity> {
             case HINA    -> BlueStudentMod.id("textures/entity/hina_bed.png");
             case ALICE   -> BlueStudentMod.id("textures/entity/alice_bed.png");
             case KISAKI  -> BlueStudentMod.id("textures/entity/kisaki_bed.png");
+            case MARIE  -> BlueStudentMod.id("textures/entity/marie_bed.png");
+            case HIKARI  -> BlueStudentMod.id("textures/entity/hikari_bed.png");
+            case NOZOMI  -> BlueStudentMod.id("textures/entity/nozomi_bed.png");
         };
     }
 }

@@ -20,7 +20,7 @@ public class WeaponSpecs {
 
     // ホシノ：通常（ショットガン）
     private static final WeaponSpec HOSHINO_MAIN = WeaponSpec.projectile(
-            10, 15, 3.0f, 2.0f, 0.25f, 8, 0.8f, true,
+            10, 15, 3.0f, 2.0f, 0.25f, 8, 1.5f, true,
             2.0, 8.0,
             5, 43, 0, 1.5, false,
             WeaponSpec.FxType.SHOTGUN, 3.0f, 12,WeaponSpec.MuzzleLocator.MUZZLE
@@ -61,12 +61,40 @@ public class WeaponSpecs {
     );
 
     // =========================
+    // マリー
+    // =========================
+    public static final WeaponSpec MARIE_MAIN = WeaponSpec.hitscan(
+            16, 3, 5.0f, 3.0f, 0.04f, 1, 1.0f, true,
+            4.0, 10.0,
+            9, 20, 0, 3.5, false,
+            WeaponSpec.FxType.BULLET, 1.0f, 6,WeaponSpec.MuzzleLocator.MUZZLE
+    );
+    // =========================
+    // ヒカリ
+    // =========================
+    public static final WeaponSpec HIKARI_MAIN = WeaponSpec.hitscan(
+            16, 2, 1.5f, 3.0f, 0.04f, 1, 0.0f, true,
+            4.0, 10.0,
+            9, 20, 0, 3.5, false,
+            WeaponSpec.FxType.BULLET, 1.0f, 6,WeaponSpec.MuzzleLocator.MUZZLE
+    );
+    // =========================
+    // ノゾミ
+    // =========================
+    public static final WeaponSpec NOZOMI_MAIN = WeaponSpec.hitscan(
+            16, 2, 1.5f, 3.0f, 0.04f, 1, 0.0f, true,
+            4.0, 10.0,
+            9, 20, 0, 3.5, false,
+            WeaponSpec.FxType.BULLET, 1.0f, 6,WeaponSpec.MuzzleLocator.MUZZLE
+    );
+
+            // =========================
     // BR（ホシノ）
     // =========================
     private static final WeaponSpec HOSHINO_BR_MAIN = WeaponSpec.projectile(
-            12, 10, 3.5f, 2.2f, 0.22f, 8, 1.5f, true,
+            12, 10, 3.5f, 2.2f, 0.22f, 8, 2.5f, true,
             2.5, 8.0,
-            5, 35, 0, 4.0, false,
+            16, 35, 0, 4.0, false,
             WeaponSpec.FxType.SHOTGUN, 3.0f, 12,WeaponSpec.MuzzleLocator.MUZZLE
     );
 
@@ -144,6 +172,9 @@ public class WeaponSpecs {
             case HINA    -> HINA_MAIN;
             case KISAKI  -> KISAKI_MAIN;
             case ALICE   -> ALICE_MAIN;
+            case MARIE   -> MARIE_MAIN;
+            case HIKARI  -> HIKARI_MAIN;
+            case NOZOMI  -> NOZOMI_MAIN;
         };
     }
 

@@ -1,15 +1,10 @@
-package com.licht_meilleur.blue_student.ai;
+package com.licht_meilleur.blue_student.ai.only;
 
-import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
 import com.licht_meilleur.blue_student.entity.ShirokoDroneEntity;
 import com.licht_meilleur.blue_student.entity.ShirokoEntity;
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.ai.goal.Goal;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.Box;
-
-import java.util.EnumSet;
 
 public class ShirokoDroneGoal extends Goal {
 

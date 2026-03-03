@@ -235,6 +235,10 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     protected int kisakiSupportTicks = 0;
 
 
+    //ネザライト強度
+    protected static final UUID BR_TOUGH_UUID =
+            UUID.fromString("8e7f6a55-1c2d-4b1a-9a77-55aa77cc8899");
+
     private int dimFollowCooldown = 0;
 
 
@@ -294,7 +298,7 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                 .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.35)
                 .add(EntityAttributes.GENERIC_ATTACK_DAMAGE, 2.0)
                 .add(EntityAttributes.GENERIC_ARMOR, 20.0)
-                .add(EntityAttributes.GENERIC_ARMOR_TOUGHNESS, 8.0);
+                .add(EntityAttributes.GENERIC_ARMOR_TOUGHNESS, 4.0);
     }
 
     protected AbstractStudentEntity(EntityType<? extends PathAwareEntity> type, World world) {
@@ -1465,13 +1469,24 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     // ===== remove =====
     @Override
     public void remove(RemovalReason reason) {
-        // ★ディメンション移動中は state を消さない
+
+        // ★ 次元移動中は state を消さない（既存）
         if (reason == RemovalReason.CHANGED_DIMENSION) {
             super.remove(reason);
             return;
         }
 
+        // ★ チャンクアンロード/プレイヤー離脱等で一時的に消える場合も state を消さない
+        //   （後でチャンク再ロード時に復活する前提）
+        if (reason == RemovalReason.UNLOADED_TO_CHUNK
+                || reason == RemovalReason.UNLOADED_WITH_PLAYER) {
+            super.remove(reason);
+            return;
+        }
+
         super.remove(reason);
+
+        // ここから下は「本当に消えた」ケースだけでOK
         if (this.getWorld().isClient) return;
 
         if (this.getWorld() instanceof ServerWorld sw) {
@@ -1481,6 +1496,16 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
                 st.clearStudent(getStudentId());
             }
         }
+    }
+
+    @Override
+    public boolean canImmediatelyDespawn(double distanceSquared) {
+        return false;
+    }
+
+    @Override
+    public boolean cannotDespawn() {
+        return true;
     }
 
 
@@ -2110,6 +2135,10 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
             case HINA    -> BlueStudentMod.HINA.create(dest);
             case ALICE   -> BlueStudentMod.ALICE.create(dest);
             case KISAKI  -> BlueStudentMod.KISAKI.create(dest);
+            case MARIE  -> BlueStudentMod.MARIE.create(dest);
+            case HIKARI  -> BlueStudentMod.HIKARI.create(dest);
+            case NOZOMI  -> BlueStudentMod.NOZOMI.create(dest);
+
         };
 
         if (!(raw instanceof AbstractStudentEntity ase)) return false;
@@ -2191,10 +2220,22 @@ private void tickFormFromEquipment() {
     }
 
     private void applyFormStatsAndAi(StudentForm f) {
-        this.isBrMode = (f == StudentForm.BR);
 
-        // ここで防御力/HP/ノックバック耐性などを上げたいなら後で加える
-        // まずはモデル切替＆WeaponSpec切替が動く土台を作る
+        var tough = this.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS);
+        if (tough == null) return;
+
+        // いったん解除（NORMALに戻る時もここが効く）
+        tough.removeModifier(BR_TOUGH_UUID);
+
+        if (f == StudentForm.BR) {
+            // 通常4.0 → +4.0 で 合計8.0 にする
+            tough.addPersistentModifier(new EntityAttributeModifier(
+                    BR_TOUGH_UUID,
+                    "br_toughness",
+                    4.0,
+                    EntityAttributeModifier.Operation.ADDITION
+            ));
+        }
     }
 
 

@@ -1,4 +1,4 @@
-package com.licht_meilleur.blue_student.ai;
+package com.licht_meilleur.blue_student.ai.only;
 
 import com.licht_meilleur.blue_student.entity.HinaEntity;
 import com.licht_meilleur.blue_student.student.IStudentEntity;

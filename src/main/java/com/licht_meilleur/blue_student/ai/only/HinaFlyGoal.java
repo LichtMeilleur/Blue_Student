@@ -1,10 +1,8 @@
-package com.licht_meilleur.blue_student.ai;
+package com.licht_meilleur.blue_student.ai.only;
 
 import com.licht_meilleur.blue_student.entity.HinaEntity;
 import com.licht_meilleur.blue_student.student.IStudentEntity;
 import net.minecraft.entity.ai.goal.Goal;
-
-import java.util.EnumSet;
 
 public class HinaFlyGoal extends Goal {
     private final HinaEntity mob;

@@ -5,15 +5,13 @@ import com.licht_meilleur.blue_student.client.block.CraftChamberRenderer;
 import com.licht_meilleur.blue_student.client.block.OnlyBedRenderer;
 import com.licht_meilleur.blue_student.client.block.TabletBlockRenderer;
 import com.licht_meilleur.blue_student.client.screen.StudentScreen;
-import com.licht_meilleur.blue_student.client.student_renderer.KisakiRenderer;
-import com.licht_meilleur.blue_student.client.student_renderer.ShirokoRenderer;
-import com.licht_meilleur.blue_student.client.student_renderer.HoshinoRenderer;
-import com.licht_meilleur.blue_student.client.student_renderer.HinaRenderer;
-import com.licht_meilleur.blue_student.client.student_renderer.AliceRenderer;
+import com.licht_meilleur.blue_student.client.student_renderer.*;
+
 
 import com.licht_meilleur.blue_student.client.projectile.SonicBeamRenderer;
 import com.licht_meilleur.blue_student.client.projectile.BulletRenderer;
 import com.licht_meilleur.blue_student.client.screen.TabletScreen;
+import com.licht_meilleur.blue_student.client.screen.CraftChamberScreen;
 import com.licht_meilleur.blue_student.client.network.ClientPackets;
 import com.licht_meilleur.blue_student.registry.ModEntities;
 import com.licht_meilleur.blue_student.registry.ModScreenHandlers;
@@ -37,23 +35,29 @@ public class BlueStudentClient implements ClientModInitializer {
         EntityRendererRegistry.register(BlueStudentMod.HINA, HinaRenderer::new);
         EntityRendererRegistry.register(BlueStudentMod.KISAKI, KisakiRenderer::new);
         EntityRendererRegistry.register(BlueStudentMod.ALICE, AliceRenderer::new);
+        EntityRendererRegistry.register(BlueStudentMod.MARIE, MarieRenderer::new);
+        EntityRendererRegistry.register(BlueStudentMod.HIKARI, HikariRenderer::new);
+        EntityRendererRegistry.register(BlueStudentMod.NOZOMI, NozomiRenderer::new);
 
-        //EntityRendererRegistry.register(ModEntities.HYPER_CANNON, HyperCannonRenderer::new);
-        EntityRendererRegistry.register(ModEntities.SONIC_BEAM, SonicBeamRenderer::new);
+
+
 
         EntityRendererRegistry.register(BlueStudentMod.KISAKI_DRAGON, KisakiDragonRenderer::new);
         EntityRendererRegistry.register(BlueStudentMod.SHIROKO_DRONE, ShirokoDroneRenderer::new);
 
         BlockEntityRendererRegistry.register(BlueStudentMod.TABLET_BE, ctx -> new TabletBlockRenderer());
-        BlockEntityRendererFactories.register(BlueStudentMod.CRAFT_CHAMBER_BE, ctx -> new CraftChamberRenderer());
+        BlockEntityRendererRegistry.register(BlueStudentMod.CRAFT_CHAMBER_BE, ctx -> new CraftChamberRenderer(ctx));
         BlockEntityRendererFactories.register(BlueStudentMod.ONLY_BED_BE, ctx -> new OnlyBedRenderer());
 
         HandledScreens.register(ModScreenHandlers.STUDENT_MENU, StudentScreen::new);
+        HandledScreens.register(ModScreenHandlers.CRAFT_CHAMBER_MENU, CraftChamberScreen::new);
 
         // ★タブレットは ScreenHandler じゃなく “Clientで直接Screen開く” 方式
         BlueStudentMod.OPEN_TABLET_SCREEN = TabletScreen::open;
 
         EntityRendererRegistry.register(BlueStudentMod.STUDENT_BULLET, ctx -> new BulletRenderer(ctx));
+        //EntityRendererRegistry.register(ModEntities.HYPER_CANNON, HyperCannonRenderer::new);
+        EntityRendererRegistry.register(ModEntities.SONIC_BEAM, SonicBeamRenderer::new);
         ClientPackets.registerS2C();
     }
 }
