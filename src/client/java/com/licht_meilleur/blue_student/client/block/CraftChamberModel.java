@@ -14,7 +14,7 @@ public class CraftChamberModel extends GeoModel<CraftChamberBlockEntity> {
 
     @Override
     public Identifier getTextureResource(CraftChamberBlockEntity animatable) {
-        return BlueStudentMod.id("textures/block/craft_chamber.png");
+        return BlueStudentMod.id("textures/entity/craft_chamber.png");
     }
 
     @Override

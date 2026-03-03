@@ -1,8 +1,13 @@
 {
   "variants": {
-    "facing=north": { "model": "blue_student:block/craft_chamber", "y": 0 },
-    "facing=south": { "model": "blue_student:block/craft_chamber", "y": 180 },
-    "facing=west":  { "model": "blue_student:block/craft_chamber", "y": 90 },
-    "facing=east":  { "model": "blue_student:block/craft_chamber", "y": 270 }
+    "half=lower,facing=north": { "model": "blue_student:block/craft_chamber", "y": 0 },
+    "half=lower,facing=south": { "model": "blue_student:block/craft_chamber", "y": 180 },
+    "half=lower,facing=west":  { "model": "blue_student:block/craft_chamber", "y": 90 },
+    "half=lower,facing=east":  { "model": "blue_student:block/craft_chamber", "y": 270 },
+
+    "half=upper,facing=north": { "model": "blue_student:block/craft_chamber", "y": 0 },
+    "half=upper,facing=south": { "model": "blue_student:block/craft_chamber", "y": 180 },
+    "half=upper,facing=west":  { "model": "blue_student:block/craft_chamber", "y": 90 },
+    "half=upper,facing=east":  { "model": "blue_student:block/craft_chamber", "y": 270 }
   }
 }

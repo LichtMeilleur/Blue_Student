@@ -7,7 +7,7 @@
     "skill.blue_student.shiroko.only": "Drone Attack",
     "weapon.blue_student.shiroko": "Assault Rifle",
   "student.blue_student.hoshino": "Hoshino",
-    "skill.blue_student.hoshino.only": "Player Guard",
+    "skill.blue_student.hoshino.only": "Guard",
     "weapon.blue_student.hoshino": "Shot Gun",
   "student.blue_student.hina": "Hina",
     "skill.blue_student.hina.only": "Aerial Support",
@@ -18,6 +18,16 @@
   "student.blue_student.alice": "Alice",
     "skill.blue_student.alice.only": "Hyper Shot",
     "weapon.blue_student.alice": "rail Gun",
+  "student.blue_student.marie": "marie",
+  "skill.blue_student.marie.only": "player buff",
+  "weapon.blue_student.marie": "hand Gun",
+  "student.blue_student.hikari": "hikari",
+  "skill.blue_student.hikari.only": "go go train(with nozomi powerup)",
+  "weapon.blue_student.hikari": "hand Gun",
+  "student.blue_student.nozomi": "nozomi",
+  "skill.blue_student.nozomi.only": "go go train(with hikari powerup)",
+  "weapon.blue_student.nozomi": "hand Gun",
+
 
   "aimode.blue_student.follow": "Follow",
   "aimode.blue_student.security": "Security",
@@ -26,8 +36,9 @@
   "ability.blue_student.shiroko": "Summons a drone for supporting fire.",
   "ability.blue_student.hoshino": "Guards the player by moving in front of them.",
   "ability.blue_student.hina": "Can fly and fire from above. High rate of fire.",
-  "ability.blue_student.kisaki": "Buffs the player.",
+  "ability.blue_student.kisaki": "Buffs the student.",
   "ability.blue_student.alice": "Fires a high-power hyper shot.",
+  "ability.blue_student.marie": "Buffs the player.",
 
   "msg.blue_student.not_in_same_dimension":"Does not exist in the same dimension"
 

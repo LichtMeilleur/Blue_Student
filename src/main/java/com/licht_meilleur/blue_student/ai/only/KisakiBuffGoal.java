@@ -1,4 +1,4 @@
-package com.licht_meilleur.blue_student.ai;
+package com.licht_meilleur.blue_student.ai.only;
 
 import com.licht_meilleur.blue_student.BlueStudentMod;
 import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
@@ -10,7 +10,6 @@ import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Box;
-import com.licht_meilleur.blue_student.entity.KisakiEntity;
 import net.minecraft.util.math.Vec3d;
 
 

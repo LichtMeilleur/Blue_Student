@@ -1,6 +1,7 @@
 package com.licht_meilleur.blue_student.entity;
 
 import com.licht_meilleur.blue_student.ai.*;
+import com.licht_meilleur.blue_student.ai.only.ShirokoDroneGoal;
 import com.licht_meilleur.blue_student.bed.BedLinkManager;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
 import com.licht_meilleur.blue_student.student.StudentId;
@@ -9,7 +10,6 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ai.goal.EscapeDangerGoal;
 import net.minecraft.entity.ai.goal.SwimGoal;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
-import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.entity.data.DataTracker;

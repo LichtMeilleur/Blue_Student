@@ -1,6 +1,5 @@
-package com.licht_meilleur.blue_student.client;
+package com.licht_meilleur.blue_student.client.others;
 
-import com.licht_meilleur.blue_student.entity.KisakiDragonEntity;
 import com.licht_meilleur.blue_student.entity.ShirokoDroneEntity;
 import net.minecraft.util.Identifier;
 import software.bernie.geckolib.model.GeoModel;

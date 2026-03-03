@@ -2,6 +2,7 @@ package com.licht_meilleur.blue_student.entity;
 
 import com.licht_meilleur.blue_student.ai.*;
 import com.licht_meilleur.blue_student.ai.br_ai.*;
+import com.licht_meilleur.blue_student.ai.only.AliceHyperShotGoal;
 import com.licht_meilleur.blue_student.bed.BedLinkManager;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
 import com.licht_meilleur.blue_student.student.StudentBrAction;

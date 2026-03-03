@@ -11,6 +11,7 @@ import com.licht_meilleur.blue_student.entity.*;
 
 import com.licht_meilleur.blue_student.entity.projectile.StudentBulletEntity;
 import com.licht_meilleur.blue_student.item.OnlyBedItem;
+import com.licht_meilleur.blue_student.loot.ModLoot;
 import com.licht_meilleur.blue_student.network.ModPackets;
 import com.licht_meilleur.blue_student.registry.ModEntities;
 import com.licht_meilleur.blue_student.registry.ModScreenHandlers;
@@ -25,6 +26,9 @@ import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.entity.EntityDimensions;
 import net.minecraft.entity.SpawnGroup;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.attribute.DefaultAttributeContainer;
+import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.mob.PathAwareEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
@@ -80,6 +84,27 @@ public class BlueStudentMod implements ModInitializer {
                     .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
                     .build()
     );
+    public static final EntityType<MarieEntity> MARIE = Registry.register(
+            Registries.ENTITY_TYPE,
+            id("marie"),
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, MarieEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
+                    .build()
+    );
+    public static final EntityType<HikariEntity> HIKARI = Registry.register(
+            Registries.ENTITY_TYPE,
+            id("hikari"),
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, HikariEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
+                    .build()
+    );
+    public static final EntityType<NozomiEntity> NOZOMI = Registry.register(
+            Registries.ENTITY_TYPE,
+            id("nozomi"),
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, NozomiEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
+                    .build()
+    );
 
 
 
@@ -104,6 +129,20 @@ public class BlueStudentMod implements ModInitializer {
                     .trackedUpdateRate(1)
                     .build()
     );
+    public static DefaultAttributeContainer.Builder createTrainAttributes() {
+        return PathAwareEntity.createMobAttributes()
+                .add(EntityAttributes.GENERIC_MAX_HEALTH, 50.0)
+                .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.25)
+                .add(EntityAttributes.GENERIC_FOLLOW_RANGE, 32.0);
+    }
+
+    public static DefaultAttributeContainer.Builder createGunTrainAttributes() {
+        return PathAwareEntity.createMobAttributes()
+                .add(EntityAttributes.GENERIC_MAX_HEALTH, 50.0)
+                .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.0)
+                .add(EntityAttributes.GENERIC_FOLLOW_RANGE, 32.0);
+    }
+
 
 
     // ===== OnlyBed =====
@@ -137,6 +176,18 @@ public class BlueStudentMod implements ModInitializer {
     public static final Item ALICE_BED_ITEM = Registry.register(
             Registries.ITEM, id("alice_bed"),
             new OnlyBedItem(ONLY_BED_BLOCK, StudentId.ALICE, new Item.Settings().maxCount(64))
+    );
+    public static final Item MARIE_BED_ITEM = Registry.register(
+            Registries.ITEM, id("marie_bed"),
+            new OnlyBedItem(ONLY_BED_BLOCK, StudentId.MARIE, new Item.Settings().maxCount(64))
+    );
+    public static final Item HIKARI_BED_ITEM = Registry.register(
+            Registries.ITEM, id("hikari_bed"),
+            new OnlyBedItem(ONLY_BED_BLOCK, StudentId.HIKARI, new Item.Settings().maxCount(64))
+    );
+    public static final Item NOZOMI_BED_ITEM = Registry.register(
+            Registries.ITEM, id("nozmi_bed"),
+            new OnlyBedItem(ONLY_BED_BLOCK, StudentId.NOZOMI, new Item.Settings().maxCount(64))
     );
 
     // ===== Tablet =====
@@ -188,18 +239,32 @@ public class BlueStudentMod implements ModInitializer {
 
 
 
+
+
+
+
+    public static final Item TICKET =
+            Registry.register(Registries.ITEM, id("ticket"),
+                    new Item(new Item.Settings().maxCount(64)));
+
+
+
     @Override
     public void onInitialize() {
         System.out.println("[BlueStudent] onInitialize start");
         LOGGER.info("[BlueStudent] onInitialize start");
         ModEntities.register();
+        ModLoot.init();
 
         FabricDefaultAttributeRegistry.register(SHIROKO, AbstractStudentEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(HOSHINO, AbstractStudentEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(HINA, AbstractStudentEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(KISAKI, AbstractStudentEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(ALICE, AbstractStudentEntity.createAttributes());
-        //FabricDefaultAttributeRegistry.register(HOSHINO, AbstractStudentEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(MARIE, AbstractStudentEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(HIKARI, AbstractStudentEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(NOZOMI, AbstractStudentEntity.createAttributes());
+
         FabricDefaultAttributeRegistry.register(HINA, HinaEntity.createAttributes());
 
 
@@ -225,6 +290,9 @@ public class BlueStudentMod implements ModInitializer {
             case HINA -> HINA_BED_ITEM;
             case ALICE -> ALICE_BED_ITEM;
             case KISAKI -> KISAKI_BED_ITEM;
+            case MARIE -> MARIE_BED_ITEM;
+            case HIKARI -> HIKARI_BED_ITEM;
+            case NOZOMI -> NOZOMI_BED_ITEM;
         };
     }
     /** client側でだけセットされる。サーバーでは null のまま */

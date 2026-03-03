@@ -26,6 +26,18 @@ public enum StudentId implements StringIdentifiable {
     KISAKI("kisaki", 28, 18,
             new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
             BlueStudentMod.id("textures/gui/kisaki_face.png"),
+            new Vec3d(0.0, -0.50, 1.00)),
+    MARIE("marie", 25, 18,
+                   new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
+            BlueStudentMod.id("textures/gui/marie_face.png"),
+            new Vec3d(0.0, -0.50, 1.00)),
+    HIKARI("hikari", 25, 18,
+                  new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
+            BlueStudentMod.id("textures/gui/hikari_face.png"),
+            new Vec3d(0.0, -0.50, 1.00)),
+    NOZOMI("nozomi", 25, 18,
+                  new StudentAiMode[]{StudentAiMode.FOLLOW, StudentAiMode.SECURITY},
+            BlueStudentMod.id("textures/gui/nozomi_face.png"),
             new Vec3d(0.0, -0.50, 1.00));
 
     private final String key;
