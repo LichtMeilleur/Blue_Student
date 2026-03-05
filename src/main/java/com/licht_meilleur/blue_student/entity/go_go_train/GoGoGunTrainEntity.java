@@ -1,5 +1,8 @@
-package com.licht_meilleur.blue_student.entity;
+package com.licht_meilleur.blue_student.entity.go_go_train;
 
+import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
+import com.licht_meilleur.blue_student.entity.HikariEntity;
+import com.licht_meilleur.blue_student.entity.TrainEntity;
 import com.licht_meilleur.blue_student.entity.projectile.GunTrainShellEntity;
 import com.licht_meilleur.blue_student.weapon.WeaponSpec;
 import net.minecraft.entity.Entity;
@@ -25,7 +28,7 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 
 import java.util.UUID;
 
-public class GunTrainEntity extends Entity implements GeoEntity {
+public class GoGoGunTrainEntity extends Entity implements GeoEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
@@ -40,23 +43,23 @@ public class GunTrainEntity extends Entity implements GeoEntity {
     private Vec3d anchorPos = null;
 
     private boolean mergedMode = false;
-    public GunTrainEntity setMergedMode(boolean v){ this.mergedMode = v; return this; }
+    public GoGoGunTrainEntity setMergedMode(boolean v){ this.mergedMode = v; return this; }
     public boolean isMergedMode(){ return mergedMode; }
 
 
     // ★追加：クライアントが砲塔回転用に参照できるターゲットEntityId
     private static final TrackedData<Integer> SYNC_TARGET_EID =
-            DataTracker.registerData(GunTrainEntity.class, TrackedDataHandlerRegistry.INTEGER);
+            DataTracker.registerData(GoGoGunTrainEntity.class, TrackedDataHandlerRegistry.INTEGER);
 
     private static final TrackedData<Float> SYNC_SHEET_YAW =
-            DataTracker.registerData(GunTrainEntity.class, TrackedDataHandlerRegistry.FLOAT);
+            DataTracker.registerData(GoGoGunTrainEntity.class, TrackedDataHandlerRegistry.FLOAT);
     private static final TrackedData<Float> SYNC_BODY_YAW =
-            DataTracker.registerData(GunTrainEntity.class, TrackedDataHandlerRegistry.FLOAT);
+            DataTracker.registerData(GoGoGunTrainEntity.class, TrackedDataHandlerRegistry.FLOAT);
 
 
 
 
-    public GunTrainEntity(EntityType<?> type, World world) {
+    public GoGoGunTrainEntity(EntityType<?> type, World world) {
         super(type, world);
         this.noClip = true;
         this.setNoGravity(true);
@@ -75,9 +78,9 @@ public class GunTrainEntity extends Entity implements GeoEntity {
     private void setSheetYawServer(float yaw) { this.dataTracker.set(SYNC_SHEET_YAW, MathHelper.wrapDegrees(yaw)); }
 
     // ===== 外部セット =====
-    public GunTrainEntity setOwnerPlayerUuid(UUID ownerPlayerUuid) { this.ownerPlayerUuid = ownerPlayerUuid; return this; }
-    public GunTrainEntity setTrainUuid(UUID trainUuid) { this.trainUuid = trainUuid; return this; }
-    public GunTrainEntity setPassengerStudentUuid(UUID passengerStudentUuid) { this.passengerStudentUuid = passengerStudentUuid; return this; }
+    public GoGoGunTrainEntity setOwnerPlayerUuid(UUID ownerPlayerUuid) { this.ownerPlayerUuid = ownerPlayerUuid; return this; }
+    public GoGoGunTrainEntity setTrainUuid(UUID trainUuid) { this.trainUuid = trainUuid; return this; }
+    public GoGoGunTrainEntity setPassengerStudentUuid(UUID passengerStudentUuid) { this.passengerStudentUuid = passengerStudentUuid; return this; }
 
     public UUID getOwnerPlayerUuid() { return ownerPlayerUuid; }
     public UUID getTrainUuid() { return trainUuid; }
@@ -96,6 +99,11 @@ public class GunTrainEntity extends Entity implements GeoEntity {
         this.prevYaw = y;
         this.setYaw(y);
         this.refreshPositionAndAngles(this.getX(), this.getY(), this.getZ(), y, 0.0f);
+
+        // ★合体モードのbodyYawは tickFollowTrain が握る
+        if (!mergedMode) {
+            this.dataTracker.set(SYNC_BODY_YAW, y);
+        }
     }
 
     @Override
@@ -107,7 +115,7 @@ public class GunTrainEntity extends Entity implements GeoEntity {
 
         if (!(this.getWorld() instanceof ServerWorld sw)) return;
 
-        tickAnchor();
+        tickFollowTrain(sw);
 
         if (++lifeTicks > MAX_LIFE) { discardAndNotify(sw); return; }
         if (!isOwnerAlive(sw))      { discardAndNotify(sw); return; }
@@ -119,22 +127,20 @@ public class GunTrainEntity extends Entity implements GeoEntity {
         }
 
         // ===== 向き制御 =====
-        LivingEntity target = findTarget(sw);
+        LivingEntity target = mergedMode ? findTrainTarget(sw) : findTarget(sw);
 
-        // ★ターゲット同期（射撃してなくてもクライアントが参照できる）
+// ★ターゲット同期（クライアントが参照）
         this.dataTracker.set(SYNC_TARGET_EID, (target != null) ? target.getId() : -1);
 
-// もし何かに乗ってたら単体版としては降りる（合体は別Entityで）
-        if (this.hasVehicle()) this.stopRiding();
-
-// 1) 車体Yaw（単体：敵へ向けて車体も回す）
-        if (target != null) {
+// 1) 車体Yaw（合体時は先頭列車yaw固定なので回さない）
+        if (!mergedMode && target != null) {
             Vec3d d = target.getEyePos().subtract(this.getPos());
             if (d.horizontalLengthSquared() > 1.0e-6) {
                 float yaw = (float)(MathHelper.atan2(d.z, d.x) * (180.0 / Math.PI)) - 90.0f;
                 setYawStableServer(yaw);
             }
         }
+
 
 // 2) sheetYaw（砲塔）
         if (target != null) {
@@ -164,15 +170,20 @@ public class GunTrainEntity extends Entity implements GeoEntity {
             }
         }
     }
+    private LivingEntity findTrainTarget(ServerWorld sw) {
+        if (trainUuid == null) return null;
 
-    private void tickAnchor() {
-        if (anchorPos == null) return;
-        if (this.hasVehicle()) return;
+        Entity t = sw.getEntity(trainUuid);
+        if (!(t instanceof GoGoTrainEntity train) || !train.isAlive()) return null;
 
-        this.refreshPositionAndAngles(anchorPos.x, anchorPos.y, anchorPos.z, this.getYaw(), 0.0f);
-        this.setVelocity(Vec3d.ZERO);
-        this.velocityModified = true;
+        UUID tu = train.getTargetUuid(); // ★ここ
+        if (tu == null) return null;
+
+        Entity e = sw.getEntity(tu);
+        return (e instanceof LivingEntity le && le.isAlive()) ? le : null;
     }
+
+
 
     private void ensurePassengerMounted(ServerWorld sw) {
         if (passengerStudentUuid == null) return;
@@ -223,7 +234,7 @@ public class GunTrainEntity extends Entity implements GeoEntity {
     }
 
     private LivingEntity findTarget(ServerWorld sw) {
-        double r = 18.0;
+        double r = this.mergedMode ? 64.0 : 18.0; // ★合体中は広げる（好みで 48～96）
         Box box = this.getBoundingBox().expand(r, 6.0, r);
         var list = sw.getEntitiesByClass(HostileEntity.class, box, LivingEntity::isAlive);
         if (list.isEmpty()) return null;
@@ -360,6 +371,47 @@ public class GunTrainEntity extends Entity implements GeoEntity {
             }
         }
         this.discard();
+    }
+
+    // GoGoGunTrainEntity 内
+    private static final double FOLLOW_BACK  = 2.4;  // 後ろ距離
+    private static final double FOLLOW_RIGHT = 0.0;  // 横
+    private static final double FOLLOW_UP    = 0.0;  // 高さ
+
+    private void tickFollowTrain(ServerWorld sw) {
+        if (!mergedMode) return;
+        if (trainUuid == null) return;
+
+        Entity t = sw.getEntity(trainUuid);
+        if (!(t instanceof GoGoTrainEntity train) || !train.isAlive()) return;
+
+        float yaw = train.getYaw();
+        Vec3d forward = forwardFromYaw(yaw).normalize();
+        Vec3d right = forward.crossProduct(new Vec3d(0, 1, 0)).normalize();
+
+        Vec3d base = train.getPos();
+        Vec3d pos = base
+                .add(0, FOLLOW_UP, 0)
+                .add(forward.multiply(-FOLLOW_BACK))
+                .add(right.multiply(FOLLOW_RIGHT));
+
+        // ★テレポ系APIを避ける（これがブレの主因）
+        this.setPosition(pos.x, pos.y, pos.z);
+        this.setYaw(MathHelper.wrapDegrees(yaw));
+        this.setPitch(0f);
+
+        // 速度はゼロ固定
+        this.setVelocity(Vec3d.ZERO);
+        this.velocityModified = true;
+
+        // ★同期値（モデル用）
+        this.dataTracker.set(SYNC_BODY_YAW, MathHelper.wrapDegrees(yaw));
+
+        // prev を潰して補間のブレを減らす
+        this.prevX = this.getX();
+        this.prevY = this.getY();
+        this.prevZ = this.getZ();
+        this.prevYaw = this.getYaw();
     }
 
 }

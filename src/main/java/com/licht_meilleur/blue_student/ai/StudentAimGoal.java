@@ -1,6 +1,8 @@
 package com.licht_meilleur.blue_student.ai;
 
 import com.licht_meilleur.blue_student.entity.AbstractStudentEntity;
+import com.licht_meilleur.blue_student.entity.HikariEntity;
+import com.licht_meilleur.blue_student.entity.NozomiEntity;
 import com.licht_meilleur.blue_student.student.*;
 import com.licht_meilleur.blue_student.weapon.*;
 import net.minecraft.entity.LivingEntity;
@@ -40,7 +42,12 @@ public class StudentAimGoal extends Goal {
     @Override
     public boolean canStart() {
         StudentAiMode mode = student.getAiMode();
-        return mode == StudentAiMode.FOLLOW || mode == StudentAiMode.SECURITY;
+        if (mode == StudentAiMode.FOLLOW || mode == StudentAiMode.SECURITY) return true;
+
+        // ★単体スキル中もAimGoalを動かす
+        if (mob instanceof NozomiEntity n && n.isTrainSkillActive()) return true;
+
+        return false;
     }
 
     @Override
@@ -234,7 +241,15 @@ public class StudentAimGoal extends Goal {
 // 射程＆視界チェック
         double dist = mob.distanceTo(fireTarget);
         boolean canSee = mob.getVisibilityCache().canSee(fireTarget);
-        if (!canSee || dist > spec.range) {
+
+// ★スキル中は少し緩める（列車移動/座席固定でブレるため）
+        boolean skillAim =
+                (mob instanceof NozomiEntity n && n.isTrainSkillActive()) ||
+                        (mob instanceof HikariEntity h && h.isGunTrainSkillActive());
+
+        double maxRange = spec.range + (skillAim ? 8.0 : 0.0); // 好みで +4〜+12
+
+        if ((!canSee && !skillAim) || dist > maxRange) {
             fireTarget = null;
             return;
         }

@@ -1,6 +1,7 @@
 package com.licht_meilleur.blue_student.ai.only;
 
 import com.licht_meilleur.blue_student.entity.*;
+import com.licht_meilleur.blue_student.entity.go_go_train.GoGoTrainEntity;
 import com.licht_meilleur.blue_student.registry.ModEntities;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.ai.goal.Goal;
@@ -31,12 +32,39 @@ public class HikariGunTrainGoal extends Goal {
 
     @Override
     public boolean canStart() {
-        return !hikari.getWorld().isClient && !hikari.isLifeLockedForGoal();
+        if (hikari.getWorld() instanceof ServerWorld sw) {
+            UUID ownerP = hikari.getOwnerUuid();
+            if (ownerP != null) {
+                // 合体列車(GoGoTrain)が居たら単体GunTrainは出さない
+                if (!sw.getEntitiesByClass(GoGoTrainEntity.class,
+                        hikari.getBoundingBox().expand(96),
+                        e -> e.isAlive() && ownerP.equals(e.getOwnerPlayerUuid())
+                ).isEmpty()) return false;
+            }
+        }
+        return !hikari.getWorld().isClient
+                && !hikari.isLifeLockedForGoal()
+                && hikari.canUseGunTrainSkill();
     }
 
     @Override
     public boolean shouldContinue() {
-        return canStart();
+        if (hikari.getWorld().isClient) return false;
+        if (hikari.isLifeLockedForGoal()) return false;
+
+        if (!hikari.canUseGunTrainSkill()) return false;
+
+        if (hikari.getWorld() instanceof ServerWorld sw) {
+            UUID ownerP = hikari.getOwnerUuid();
+            if (ownerP != null && existsNozomi(sw, ownerP)) return false;
+        }
+        return true;
+    }
+
+    @Override
+    public void stop() {
+        hikari.setGunTrainSkillActive(false);
+        if (hikari.hasVehicle()) hikari.stopRiding();
     }
 
     @Override
@@ -69,10 +97,12 @@ public class HikariGunTrainGoal extends Goal {
             if (gun == null) {
                 gun = new GunTrainEntity(ModEntities.GUN_TRAIN, sw)
                         .setOwnerPlayerUuid(ownerP)
-                        .setPassengerStudentUuid(hikari.getUuid());
-
-                gun.setPosition(hikari.getX(), hikari.getY(), hikari.getZ());
+                        .setPassengerStudentUuid(hikari.getUuid())
+                        .setMergedMode(false);
+                Vec3d spawn = computeGunSpawnPos(sw, hikari);
+                gun.refreshPositionAndAngles(spawn.x, spawn.y, spawn.z, hikari.getYaw(), 0.0f);
                 sw.spawnEntity(gun);
+                gun.setAnchorPos(gun.getPos()); // アンカーは実際のスポーン後の座標で
 
                 // ★ここで1回だけ固定地点を決める（乗員座標ではなく）
                 gun.setAnchorPos(gun.getPos());
@@ -90,7 +120,11 @@ public class HikariGunTrainGoal extends Goal {
     }
 
     private void discardGunOnly() {
-        if (gun != null) { gun.discard(); gun = null; }
+        if (gun != null) {
+            gun.discard();
+            gun = null;
+            hikari.startGunTrainCooldown(); // ★ここでクール開始
+        }
     }
 
     private GunTrainEntity findGun(ServerWorld sw, UUID ownerP) {
@@ -120,4 +154,49 @@ public class HikariGunTrainGoal extends Goal {
         }
         return best;
     }
+    private Vec3d computeGunSpawnPos(ServerWorld sw, HikariEntity h) {
+        // 前方に 1.2、上に 0.2（好みで調整）
+        Vec3d forward = forwardFromYaw(h.getYaw()).normalize();
+        Vec3d base = h.getPos().add(0, 0.2, 0);
+
+        // 候補：前→前+右→前+左→その場→後ろ（詰まり回避）
+        Vec3d right = forward.crossProduct(new Vec3d(0, 1, 0)).normalize();
+
+        Vec3d[] candidates = new Vec3d[] {
+                base.add(forward.multiply(1.2)),
+                base.add(forward.multiply(1.0)).add(right.multiply(0.9)),
+                base.add(forward.multiply(1.0)).add(right.multiply(-0.9)),
+                base,
+                base.add(forward.multiply(-0.8))
+        };
+
+        for (Vec3d p : candidates) {
+            Vec3d grounded = snapToGround(sw, p);
+            if (isFree(sw, grounded)) return grounded;
+        }
+
+        // どれもダメなら最後は無理やり足元（noClipならほぼ問題にならない）
+        return snapToGround(sw, base);
+    }
+
+    private Vec3d snapToGround(ServerWorld sw, Vec3d p) {
+        int x = net.minecraft.util.math.MathHelper.floor(p.x);
+        int z = net.minecraft.util.math.MathHelper.floor(p.z);
+
+        int yTop = sw.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z);
+        // GunTrainは少し浮かせる（地面めり込み防止）
+        return new Vec3d(p.x, yTop + 0.5, p.z);
+    }
+
+    private boolean isFree(ServerWorld sw, Vec3d p) {
+        // GunTrainの当たり判定が小さいなら 0.8x0.8 くらいで十分
+        Box box = new Box(p.x - 0.45, p.y, p.z - 0.45, p.x + 0.45, p.y + 1.2, p.z + 0.45);
+        return sw.isSpaceEmpty(null, box);
+    }
+
+    private static Vec3d forwardFromYaw(float yawDeg) {
+        float r = yawDeg * net.minecraft.util.math.MathHelper.RADIANS_PER_DEGREE;
+        return new Vec3d(-net.minecraft.util.math.MathHelper.sin(r), 0, net.minecraft.util.math.MathHelper.cos(r));
+    }
+
 }

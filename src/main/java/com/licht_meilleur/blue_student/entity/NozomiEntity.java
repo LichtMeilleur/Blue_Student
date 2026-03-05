@@ -1,6 +1,7 @@
 package com.licht_meilleur.blue_student.entity;
 
 import com.licht_meilleur.blue_student.ai.*;
+import com.licht_meilleur.blue_student.ai.only.NozomiHikariMergeGoGoTrainGoal;
 import com.licht_meilleur.blue_student.ai.only.NozomiTrainGoal;
 import com.licht_meilleur.blue_student.bed.BedLinkManager;
 import com.licht_meilleur.blue_student.student.StudentAiMode;
@@ -33,6 +34,13 @@ public class NozomiEntity extends AbstractStudentEntity {
     private static final TrackedData<Boolean> TRAIN_ACTIVE =
             DataTracker.registerData(NozomiEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
+
+    private int trainSkillCooldown = 0;
+    private static final int TRAIN_COOLDOWN_MAX = 20 * 12; // 12秒（好みで）
+
+    private int unisonCooldown = 0;
+    private static final int UNISON_COOLDOWN_MAX = 20 * 12;
+
     public NozomiEntity(EntityType<? extends AbstractStudentEntity> type, World world) {
         super(type, world);
     }
@@ -41,6 +49,12 @@ public class NozomiEntity extends AbstractStudentEntity {
     protected void initDataTracker() {
         super.initDataTracker();
         this.dataTracker.startTracking(TRAIN_ACTIVE, false);
+    }
+    @Override
+    public void stopRiding() {
+        super.stopRiding();
+        this.noClip = false;
+        this.setNoGravity(false);
     }
 
     public void setTrainSkillActive(boolean active) {
@@ -90,27 +104,53 @@ public class NozomiEntity extends AbstractStudentEntity {
         this.goalSelector.add(0, new StudentRideWithOwnerGoal(this, this));
         this.goalSelector.add(1, new SwimGoal(this));
 
-        this.goalSelector.add(2, new NozomiTrainGoal(this));
+        this.goalSelector.add(2, new NozomiHikariMergeGoGoTrainGoal(this));
+        this.goalSelector.add(3, new NozomiTrainGoal(this));
 
-        this.goalSelector.add(3, new StudentAimGoal(this, this));
-        this.goalSelector.add(4, new StudentStuckEscapeGoal(this, this));
-        this.goalSelector.add(5, new StudentEvadeGoal(this, this));
-        this.goalSelector.add(6, new EscapeDangerGoal(this, 1.25));
+        this.goalSelector.add(4, new StudentAimGoal(this, this));
+        this.goalSelector.add(5, new StudentStuckEscapeGoal(this, this));
+        this.goalSelector.add(6, new StudentEvadeGoal(this, this));
+        this.goalSelector.add(7, new EscapeDangerGoal(this, 1.25));
 
-        this.goalSelector.add(7, new StudentReturnToOwnerGoal(this, this, 1.35, 28.0, 2.5, 48.0, 20));
+        this.goalSelector.add(8, new StudentReturnToOwnerGoal(this, this, 1.35, 28.0, 2.5, 48.0, 20));
 
-        this.goalSelector.add(8, new net.minecraft.entity.ai.goal.FleeEntityGoal<>(this, HostileEntity.class, 8.0f, 1.0, 1.35));
+        this.goalSelector.add(9, new net.minecraft.entity.ai.goal.FleeEntityGoal<>(this, HostileEntity.class, 8.0f, 1.0, 1.35));
 
-        this.goalSelector.add(9, new StudentCombatGoal(this, this));
+        this.goalSelector.add(10, new StudentCombatGoal(this, this));
 
-        this.goalSelector.add(10, new StudentFollowGoal(this, this, 1.1));
-        this.goalSelector.add(11, new StudentSecurityGoal(this, this,
+        this.goalSelector.add(11, new StudentFollowGoal(this, this, 1.1));
+        this.goalSelector.add(12, new StudentSecurityGoal(this, this,
                 new StudentSecurityGoal.ISecurityPosProvider() {
                     @Override public BlockPos getSecurityPos() { return NozomiEntity.this.getSecurityPos(); }
                     @Override public void setSecurityPos(BlockPos pos) { NozomiEntity.this.setSecurityPos(pos); }
                 },
                 1.0));
-        this.goalSelector.add(12, new StudentEatGoal(this, this));
+        this.goalSelector.add(13, new StudentEatGoal(this, this));
+    }
+    @Override
+    public void tick() {
+        super.tick();
+
+        if (!this.getWorld().isClient) {
+            if (unisonCooldown > 0) unisonCooldown--;
+        }
+        if (!this.getWorld().isClient) {
+            if (trainSkillCooldown > 0) trainSkillCooldown--;
+        }
+    }
+    public boolean canUseTrainSkill() {
+        return trainSkillCooldown <= 0;
     }
 
+    public void startTrainCooldown() {
+        trainSkillCooldown = TRAIN_COOLDOWN_MAX;
+    }
+
+    public boolean canUseUnisonSkill() {
+        return unisonCooldown <= 0;
+    }
+
+    public void startUnisonCooldown() {
+        unisonCooldown = UNISON_COOLDOWN_MAX;
+    }
 }

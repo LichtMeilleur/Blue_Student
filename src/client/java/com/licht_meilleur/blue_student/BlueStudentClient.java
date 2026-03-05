@@ -5,6 +5,7 @@ import com.licht_meilleur.blue_student.client.block.OnlyBedRenderer;
 import com.licht_meilleur.blue_student.client.block.TabletBlockRenderer;
 import com.licht_meilleur.blue_student.client.others.KisakiDragonRenderer;
 import com.licht_meilleur.blue_student.client.others.ShirokoDroneRenderer;
+import com.licht_meilleur.blue_student.client.others.go_go_train.*;
 import com.licht_meilleur.blue_student.client.screen.StudentScreen;
 import com.licht_meilleur.blue_student.client.student_renderer.*;
 import com.licht_meilleur.blue_student.client.others.*;
@@ -48,6 +49,10 @@ public class BlueStudentClient implements ClientModInitializer {
         EntityRendererRegistry.register(BlueStudentMod.SHIROKO_DRONE, ShirokoDroneRenderer::new);
         EntityRendererRegistry.register(ModEntities.TRAIN, TrainRenderer::new);
         EntityRendererRegistry.register(ModEntities.GUN_TRAIN, GunTrainRenderer::new);
+        EntityRendererRegistry.register(ModEntities.GO_GO_TRAIN, GoGoTrainRenderer::new);
+        EntityRendererRegistry.register(ModEntities.GO_GO_GUN_TRAIN, GoGoGunTrainRenderer::new);
+
+
 
         BlockEntityRendererRegistry.register(BlueStudentMod.TABLET_BE, ctx -> new TabletBlockRenderer());
         BlockEntityRendererRegistry.register(BlueStudentMod.CRAFT_CHAMBER_BE, ctx -> new CraftChamberRenderer(ctx));
@@ -62,6 +67,11 @@ public class BlueStudentClient implements ClientModInitializer {
         EntityRendererRegistry.register(BlueStudentMod.STUDENT_BULLET, ctx -> new BulletRenderer(ctx));
         //EntityRendererRegistry.register(ModEntities.HYPER_CANNON, HyperCannonRenderer::new);
         EntityRendererRegistry.register(ModEntities.SONIC_BEAM, SonicBeamRenderer::new);
+        EntityRendererRegistry.register(
+                com.licht_meilleur.blue_student.registry.ModEntities.GUN_TRAIN_SHELL,
+                GunTrainShellRenderer::new
+        );
+
         ClientPackets.registerS2C();
     }
 }

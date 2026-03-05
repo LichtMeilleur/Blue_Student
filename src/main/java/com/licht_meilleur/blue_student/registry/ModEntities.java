@@ -1,6 +1,8 @@
 package com.licht_meilleur.blue_student.registry;
 
 import com.licht_meilleur.blue_student.BlueStudentMod;
+import com.licht_meilleur.blue_student.entity.go_go_train.GoGoGunTrainEntity;
+import com.licht_meilleur.blue_student.entity.go_go_train.GoGoTrainEntity;
 import com.licht_meilleur.blue_student.entity.GunTrainEntity;
 import com.licht_meilleur.blue_student.entity.projectile.GunTrainShellEntity;
 import com.licht_meilleur.blue_student.entity.TrainEntity;
@@ -20,6 +22,8 @@ public final class ModEntities {
     public static EntityType<HyperCannonEntity> HYPER_CANNON;
     public static EntityType<TrainEntity> TRAIN;
     public static EntityType<GunTrainEntity> GUN_TRAIN;
+    public static EntityType<GoGoTrainEntity> GO_GO_TRAIN;
+    public static EntityType<GoGoGunTrainEntity> GO_GO_GUN_TRAIN;
 
     public static void register() {
         if (HYPER_CANNON != null) return; // 二重呼び防止
@@ -50,6 +54,24 @@ public final class ModEntities {
                 Registries.ENTITY_TYPE,
                 BlueStudentMod.id("gun_train"),
                 FabricEntityTypeBuilder.<GunTrainEntity>create(SpawnGroup.MISC, GunTrainEntity::new)
+                        .dimensions(EntityDimensions.fixed(1.2f, 1.1f))
+                        .trackRangeBlocks(64)
+                        .trackedUpdateRate(1)
+                        .build()
+        );
+        GO_GO_TRAIN = Registry.register(
+                Registries.ENTITY_TYPE,
+                BlueStudentMod.id("go_go_train"),
+                FabricEntityTypeBuilder.<GoGoTrainEntity>create(SpawnGroup.MISC, GoGoTrainEntity::new)
+                        .dimensions(EntityDimensions.fixed(1.2f, 1.1f))
+                        .trackRangeBlocks(64)
+                        .trackedUpdateRate(1)
+                        .build()
+        );
+        GO_GO_GUN_TRAIN = Registry.register(
+                Registries.ENTITY_TYPE,
+                BlueStudentMod.id("go_go_gun_train"),
+                FabricEntityTypeBuilder.<GoGoGunTrainEntity>create(SpawnGroup.MISC, GoGoGunTrainEntity::new)
                         .dimensions(EntityDimensions.fixed(1.2f, 1.1f))
                         .trackRangeBlocks(64)
                         .trackedUpdateRate(1)

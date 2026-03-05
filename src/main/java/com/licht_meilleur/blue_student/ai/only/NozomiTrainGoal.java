@@ -1,6 +1,7 @@
 package com.licht_meilleur.blue_student.ai.only;
 
 import com.licht_meilleur.blue_student.entity.*;
+import com.licht_meilleur.blue_student.entity.go_go_train.GoGoTrainEntity;
 import com.licht_meilleur.blue_student.registry.ModEntities;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.ai.goal.Goal;
@@ -24,6 +25,8 @@ public class NozomiTrainGoal extends Goal {
 
     private TrainEntity train = null;
 
+    private int shootCd = 0;
+
     public NozomiTrainGoal(NozomiEntity nozomi) {
         this.nozomi = nozomi;
         this.setControls(EnumSet.noneOf(Control.class));
@@ -31,12 +34,43 @@ public class NozomiTrainGoal extends Goal {
 
     @Override
     public boolean canStart() {
-        return !nozomi.getWorld().isClient && !nozomi.isLifeLockedForGoal();
+        if (nozomi.getWorld() instanceof ServerWorld sw) {
+            UUID ownerP = nozomi.getOwnerUuid();
+            if (ownerP != null) {
+                // 合体列車(GoGoTrain)が居たら単体Trainは出さない
+                if (!sw.getEntitiesByClass(GoGoTrainEntity.class,
+                        nozomi.getBoundingBox().expand(96),
+                        e -> e.isAlive() && ownerP.equals(e.getOwnerPlayerUuid())
+                ).isEmpty()) return false;
+            }
+        }
+        return !nozomi.getWorld().isClient
+                && !nozomi.isLifeLockedForGoal()
+                && nozomi.canUseTrainSkill();
+
     }
 
     @Override
     public boolean shouldContinue() {
-        return canStart();
+        if (nozomi.getWorld().isClient) return false;
+        if (nozomi.isLifeLockedForGoal()) return false;
+
+        // クール中なら続けない（Trainが消えた後の復帰にも効く）
+        if (!nozomi.canUseTrainSkill()) return false;
+
+        // 相方が来たら単体は終了
+        if (nozomi.getWorld() instanceof ServerWorld sw) {
+            UUID ownerP = nozomi.getOwnerUuid();
+            if (ownerP != null && existsHikari(sw, ownerP)) return false;
+        }
+        return true;
+    }
+
+    @Override
+    public void stop() {
+        nozomi.setTrainSkillActive(false);
+        // 乗ってたら降ろす（任意：残留防止）
+        if (nozomi.hasVehicle()) nozomi.stopRiding();
     }
 
     @Override
@@ -75,15 +109,26 @@ public class NozomiTrainGoal extends Goal {
             }
         }
 
-        // target を Train に渡す（これが center=null の主因だった）
+        train.setMode(TrainEntity.TrainMode.SINGLE_CHARGE);
+        train.setGunTrainUuid(null);          // 単体なら gun を切る（残骸リンクで誤判定しない）
+        train.setClockwise(true);             // 無害だけど単体では意味なし
         train.setTargetUuid(target.getUuid());
-        train.setClockwise(true); // ★時計回り（TrainEntity側で実装する）
+        train.setNozomiPassengerUuid(nozomi.getUuid());
+        nozomi.setTrainSkillActive(true);
+
+
+
 
         // Nozomi を座席へ
         if (nozomi.getVehicle() != train) {
             nozomi.stopRiding();
             nozomi.startRiding(train, true);
         }
+
+
+        // まず視線（体の向きは車体に固定するので、AimAngles用）
+        nozomi.requestLookTarget(target, 80, 2);
+
 
         // アニメON
         nozomi.setTrainSkillActive(true);

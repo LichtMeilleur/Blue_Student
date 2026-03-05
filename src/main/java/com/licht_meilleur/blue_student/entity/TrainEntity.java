@@ -4,9 +4,12 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.MovementType;
-
+import net.minecraft.entity.data.DataTracker;
+import net.minecraft.entity.data.TrackedData;
+import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -24,165 +27,311 @@ public class TrainEntity extends Entity implements GeoEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    // 合体スキル共有キー（プレイヤーUUID）
+    // ===== リンク情報 =====
     private UUID ownerPlayerUuid;
-
-    // passenger として連結される GunTrain
     private UUID gunTrainUuid;
-
-    // 周回中心（敵）
     private UUID targetUuid;
+    private UUID nozomiPassengerUuid;
 
+    // ===== モード（★ここが肝）=====
+    public enum TrainMode {
+        SINGLE_CHARGE,      // 単体：突撃（1回）だけ
+        COMBO_CYCLE         // 合体：巡航5秒→突撃→巡航5秒… を繰り返す
+    }
+
+    private TrainMode mode = TrainMode.SINGLE_CHARGE;
+    public TrainMode getMode() { return mode; }
+    public void setMode(TrainMode mode) { this.mode = mode; }
+
+    // ===== 合体時サイクル制御 =====
+    private int phaseTicks = 0;
+    private boolean gunFireEnabled = true; // ★突撃中はfalseにする
+    public boolean isGunFireEnabled() { return gunFireEnabled; }
+
+    private static final int CRUISE_TICKS = 20 * 5; // 5秒
+    private static final int CHARGE_TICKS = 20 * 1; // 突撃持続（演出用。到達で早期終了）
+    private static final double CRUISE_SPEED = 0.35;
+    private static final double CHARGE_SPEED = 1.25;
+
+    // ===== 合体巡航（円運動）パラメータ =====
     private float theta = 0f;
     private float radius = 6.0f;
     private float omega = 0.12f;
-    private int stuckTicks = 0;
-
-    private int lifeTicks = 0;
-    private static final int MAX_LIFE = 20 * 15; // 15秒
-
     private boolean clockwise = true;
+
+
+    // ===== 突撃ヒット（ノゾミスキル）パラメータ =====
+    private static final float CHARGE_HIT_RADIUS = 1.6f;   // 当たり判定（半径）
+    private static final float CHARGE_DAMAGE     = 8.0f;   // ダメージ
+    private static final double KNOCKBACK_H      = 1.2;    // 横吹き飛ばし
+    private static final double KNOCKBACK_Y      = 0.25;   // 縦吹き飛ばし
+    private static final int SINGLE_CHARGE_MIN_TICKS = 6;  // 発生直後の誤爆防止
+
+
     public TrainEntity setClockwise(boolean clockwise) { this.clockwise = clockwise; return this; }
+
+    // ===== 寿命 =====
+    private int lifeTicks = 0;
+    private static final int MAX_LIFE = 20 * 15; // 15秒（好み）
+
+    // ===== yaw同期 =====
+    private static final TrackedData<Float> SYNC_YAW =
+            DataTracker.registerData(TrainEntity.class, TrackedDataHandlerRegistry.FLOAT);
 
     public TrainEntity(EntityType<?> type, World world) {
         super(type, world);
         this.setNoGravity(true);
-        this.noClip = true;
+        this.noClip = true; // 合体/単体どっちも埋まり防止で true 推奨
     }
 
     @Override
-    protected void initDataTracker() { }
+    protected void initDataTracker() {
+        this.dataTracker.startTracking(SYNC_YAW, 0.0f);
+    }
 
     public TrainEntity setOwnerPlayerUuid(UUID ownerPlayerUuid) { this.ownerPlayerUuid = ownerPlayerUuid; return this; }
     public TrainEntity setGunTrainUuid(UUID gunUuid) { this.gunTrainUuid = gunUuid; return this; }
     public TrainEntity setTargetUuid(UUID target) { this.targetUuid = target; return this; }
+    public TrainEntity setNozomiPassengerUuid(UUID id) { this.nozomiPassengerUuid = id; return this; }
 
     public UUID getOwnerPlayerUuid() { return ownerPlayerUuid; }
     public UUID getGunTrainUuid() { return gunTrainUuid; }
     public UUID getTargetUuid() { return targetUuid; }
 
+    private void setYawStableServer(float yaw) {
+        float y = MathHelper.wrapDegrees(yaw);
+        this.prevYaw = y;
+        this.setYaw(y);
+        this.refreshPositionAndAngles(this.getX(), this.getY(), this.getZ(), y, 0.0f);
+        this.dataTracker.set(SYNC_YAW, y);
+    }
+
     @Override
     public void tick() {
         super.tick();
-        if (this.getWorld().isClient) return;
+
+        // クライアント：同期Yawを適用
+        if (this.getWorld().isClient) {
+            float y = this.dataTracker.get(SYNC_YAW);
+            this.prevYaw = y;
+            this.setYaw(y);
+            return;
+        }
         if (!(this.getWorld() instanceof ServerWorld sw)) return;
 
-        // ===== 寿命管理 =====
-        if (++lifeTicks > MAX_LIFE) {
-            this.discard();
-            return;
-        }
+        // 寿命・owner不在なら畳む
+        if (++lifeTicks > MAX_LIFE) { discardWithLinked(sw); return; }
+        if (!isOwnerAlive(sw))      { discardWithLinked(sw); return; }
 
-        // ===== owner不在なら消える =====
-        if (!isOwnerAlive(sw)) {
-            this.discard();
-            return;
-        }
 
-        ensureGunTrainMounted(sw);
-
-        Entity center = (targetUuid != null) ? sw.getEntity(targetUuid) : null;
-        if (center == null || !center.isAlive()) {
+        Entity target = (targetUuid != null) ? sw.getEntity(targetUuid) : null;
+        if (target == null || !target.isAlive()) {
+            // ターゲット無しなら停止（必要なら畳むでもOK）
             this.setVelocity(Vec3d.ZERO);
-            this.move(MovementType.SELF, this.getVelocity());
             return;
         }
 
+        // ★単体版では GunTrain 連結はしない（合体は別Entityでやる）
+        gunTrainUuid = null;
+        gunFireEnabled = false;
+
+        tickSingleCharge(sw, target);
+    }
+
+    // ==============================
+    // 単体：突撃（1回）だけ
+    // ==============================
+    private void tickSingleCharge(ServerWorld sw, Entity target) {
+        // 発生直後の誤爆防止（スポーンした瞬間に近接判定を拾うのを避ける）
+        if (lifeTicks > SINGLE_CHARGE_MIN_TICKS) {
+            if (tryChargeHit(sw)) {
+                // 1回当たったら終了（単体は“戻らない”）
+                endSkillAndDiscard(sw);
+                return;
+            }
+        }
+
+        Vec3d from = this.getPos();
+        Vec3d to   = target.getPos().add(0, 0.2, 0);
+        Vec3d d    = to.subtract(from);
+
+        // ターゲット到達でも終了
+        if (d.lengthSquared() < 0.45) {
+            endSkillAndDiscard(sw);
+            return;
+        }
+
+        Vec3d v = d.normalize().multiply(CHARGE_SPEED);
+        this.setVelocity(v);
+        this.move(MovementType.SELF, v);
+
+        if (v.horizontalLengthSquared() > 1.0e-6) {
+            float yaw = (float)(MathHelper.atan2(v.z, v.x) * (180.0 / Math.PI)) - 90.0f;
+            setYawStableServer(yaw);
+        }
+    }
+
+    // ==============================
+    // 合体：巡航5秒→突撃→巡航5秒…
+    // ==============================
+    private void tickComboCycle(ServerWorld sw, Entity target) {
+        // phaseTicks は「今のフェーズの残り」
+        // 0になったらフェーズ切替
+        if (phaseTicks <= 0) {
+            // フェーズ切替
+            // gunFireEnabled が true なら今から「突撃フェーズ」に入る、falseなら「巡航」に戻す
+            if (gunFireEnabled) {
+                // 次：突撃（射撃停止）
+                gunFireEnabled = false;
+                phaseTicks = CHARGE_TICKS;
+            } else {
+                // 次：巡航（射撃再開）
+                gunFireEnabled = true;
+                phaseTicks = CRUISE_TICKS;
+            }
+        }
+
+        // フェーズ処理
+        if (gunFireEnabled) {
+            // 巡航：円運動（合体時のみ）
+            tickCruiseOrbit(sw, target);
+        } else {
+            // 突撃：射撃停止、一直線
+            tickCharge(sw, target);
+        }
+
+        phaseTicks--;
+    }
+
+    private void tickCruiseOrbit(ServerWorld sw, Entity center) {
         float step = Math.abs(omega);
-        theta += clockwise ? -step : +step;
+        theta += clockwise ? +step : -step;
 
         double cx = center.getX();
         double cz = center.getZ();
 
         double gx = cx + Math.cos(theta) * radius;
         double gz = cz + Math.sin(theta) * radius;
-        double gy = center.getY();
+        double gy = center.getY(); // 高さは中心に合わせる（好みでHeightmapにしてもOK）
 
         Vec3d goal = new Vec3d(gx, gy, gz);
         Vec3d dir = goal.subtract(this.getPos());
 
         if (dir.lengthSquared() > 1e-6) {
-            this.setVelocity(dir.normalize().multiply(0.35));
+            this.setVelocity(dir.normalize().multiply(CRUISE_SPEED));
         } else {
             this.setVelocity(Vec3d.ZERO);
         }
 
         this.move(MovementType.SELF, this.getVelocity());
 
-        // ===== 進行方向を向く =====
-        // move() のあと
         Vec3d v = this.getVelocity();
         if (v.horizontalLengthSquared() > 1.0e-6) {
             float yaw = (float)(MathHelper.atan2(v.z, v.x) * (180.0 / Math.PI)) - 90.0f;
-
-            // ★ setYaw じゃなく refreshPositionAndAngles（prevYawも一緒に整う）
-            this.refreshPositionAndAngles(this.getX(), this.getY(), this.getZ(), yaw, 0.0f);
+            setYawStableServer(yaw);
         }
-
     }
 
-    // ===== passenger positioning =====
-    @Override
-    protected void updatePassengerPosition(Entity passenger, PositionUpdater updater) {
-        super.updatePassengerPosition(passenger, updater);
+    private void tickCharge(ServerWorld sw, Entity target) {
+        Vec3d from = this.getPos();
+        Vec3d to   = target.getPos().add(0, 0.2, 0);
+        Vec3d d    = to.subtract(from);
 
-        // ===== GunTrain牽引 =====
-        if (passenger instanceof GunTrainEntity) {
-            Vec3d tow = getTowPosForGunTrain();
-            updater.accept(passenger, tow.x, tow.y, tow.z);
-
-            float y = this.getYaw() - 90.0f;
-
-            passenger.setYaw(y);
-            passenger.setPitch(0.0f);
-
-            if (passenger instanceof LivingEntity le) {
-                le.setBodyYaw(y);
-                le.setHeadYaw(y);
+        if (lifeTicks > SINGLE_CHARGE_MIN_TICKS) {
+            if (tryChargeHit(sw)) {
+                // 合体時は「当たったら突撃フェーズ終了」だけでOK
+                phaseTicks = 0;
+                return;
             }
+        }
 
-            passenger.setVelocity(Vec3d.ZERO);
-            passenger.velocityModified = true;
+        // 合体突撃は「到達でフェーズ終了」させてOK
+        if (d.lengthSquared() < 0.65) {
+            phaseTicks = 0; // 次tickで巡航へ
             return;
         }
 
-        // ===== 生徒座席 =====
-        Vec3d seat = getSeatWorldTrain();
-        updater.accept(passenger, seat.x, seat.y, seat.z);
+        Vec3d v = d.normalize().multiply(CHARGE_SPEED);
+        this.setVelocity(v);
+        this.move(MovementType.SELF, v);
 
-        float y = this.getYaw();
-
-        passenger.setYaw(y);
-        passenger.setPitch(0.0f);
-
-        if (passenger instanceof LivingEntity le) {
-            le.setBodyYaw(y);
-            le.setHeadYaw(y);
+        if (v.horizontalLengthSquared() > 1.0e-6) {
+            float yaw = (float)(MathHelper.atan2(v.z, v.x) * (180.0 / Math.PI)) - 90.0f;
+            setYawStableServer(yaw);
         }
-
-        passenger.setVelocity(Vec3d.ZERO);
-        passenger.velocityModified = true;
     }
 
-    private Vec3d getTowPosForGunTrain() {
-        Vec3d forward = Vec3d.fromPolar(0, this.getYaw()).normalize();
-        Vec3d back = forward.multiply(-1);
-
-        // 後方に 1.8 ブロック（好みで）
-        return this.getPos().add(back.multiply(1.8)).add(0, 0.0, 0);
+    private void dropNozomiIfAny(ServerWorld sw) {
+        if (nozomiPassengerUuid == null) return;
+        Entity p = sw.getEntity(nozomiPassengerUuid);
+        if (p != null && p.getVehicle() == this) p.stopRiding();
     }
 
+    private void discardWithLinked(ServerWorld sw) {
+        if (gunTrainUuid != null) {
+            Entity e = sw.getEntity(gunTrainUuid);
+            if (e != null) e.discard();
+        }
+        endSkillAndDiscard(sw);
+    }
 
-    // ===== NBT =====
+    @Override
+    protected void updatePassengerPosition(Entity passenger, PositionUpdater updater) {
+        float bodyYaw = this.getYaw();
+
+        if (passenger instanceof NozomiEntity) {
+            Vec3d seat = getSeatWorldNozomiOnTrain();
+            passenger.refreshPositionAndAngles(seat.x, seat.y, seat.z, bodyYaw, 0.0f);
+
+            passenger.prevYaw = bodyYaw;
+            passenger.setYaw(bodyYaw);
+
+            if (passenger instanceof LivingEntity le) {
+                le.bodyYaw = bodyYaw;
+                le.headYaw = bodyYaw;
+                le.prevBodyYaw = bodyYaw;
+                le.prevHeadYaw = bodyYaw;
+            }
+
+            passenger.noClip = true;
+            passenger.setNoGravity(true);
+            passenger.setVelocity(Vec3d.ZERO);
+            passenger.velocityModified = true;
+        } else {
+            // それ以外は親の標準処理
+            super.updatePassengerPosition(passenger, updater);
+        }
+    }
+
+    private boolean isOwnerAlive(ServerWorld sw) {
+        if (ownerPlayerUuid == null) return false;
+
+        for (NozomiEntity n : sw.getEntitiesByClass(
+                NozomiEntity.class,
+                this.getBoundingBox().expand(128),
+                e -> e.isAlive()
+        )) {
+            if (ownerPlayerUuid.equals(n.getOwnerUuid())) return true;
+        }
+        return false;
+    }
+
     @Override
     protected void writeCustomDataToNbt(NbtCompound nbt) {
         if (ownerPlayerUuid != null) nbt.putUuid("OwnerP", ownerPlayerUuid);
         if (gunTrainUuid != null) nbt.putUuid("Gun", gunTrainUuid);
         if (targetUuid != null) nbt.putUuid("Target", targetUuid);
+        if (nozomiPassengerUuid != null) nbt.putUuid("NozomiP", nozomiPassengerUuid);
+
+        nbt.putString("Mode", mode.name());
+        nbt.putInt("Life", lifeTicks);
+        nbt.putInt("Phase", phaseTicks);
+        nbt.putBoolean("GunFire", gunFireEnabled);
 
         nbt.putFloat("Theta", theta);
         nbt.putFloat("Radius", radius);
         nbt.putFloat("Omega", omega);
+        nbt.putBoolean("Clockwise", clockwise);
     }
 
     @Override
@@ -190,10 +339,20 @@ public class TrainEntity extends Entity implements GeoEntity {
         if (nbt.containsUuid("OwnerP")) ownerPlayerUuid = nbt.getUuid("OwnerP");
         if (nbt.containsUuid("Gun")) gunTrainUuid = nbt.getUuid("Gun");
         if (nbt.containsUuid("Target")) targetUuid = nbt.getUuid("Target");
+        if (nbt.containsUuid("NozomiP")) nozomiPassengerUuid = nbt.getUuid("NozomiP");
+
+        if (nbt.contains("Mode")) {
+            try { mode = TrainMode.valueOf(nbt.getString("Mode")); }
+            catch (Exception ignored) { mode = TrainMode.SINGLE_CHARGE; }
+        }
+        lifeTicks = nbt.getInt("Life");
+        phaseTicks = nbt.getInt("Phase");
+        gunFireEnabled = nbt.getBoolean("GunFire");
 
         theta = nbt.getFloat("Theta");
         radius = nbt.getFloat("Radius");
         omega = nbt.getFloat("Omega");
+        clockwise = nbt.getBoolean("Clockwise");
     }
 
     // ===== GeckoLib =====
@@ -210,86 +369,82 @@ public class TrainEntity extends Entity implements GeoEntity {
         }));
     }
 
-    // ===== Nozzle smoke（Trainのみ）=====
-    private static final Vec3d NOZZLE_LOC = new Vec3d(0.0, 45.0, -6.0); // geoのnozzle（px）
-    private static final double LOC_SCALE = 1.0 / 16.0;
+    private void endSkillAndDiscard(ServerWorld sw) {
+        // ノゾミを降ろす
+        dropNozomiIfAny(sw);
 
-    private Vec3d toWorldFromLocator(Vec3d locPx) {
-        double yawRad = Math.toRadians(this.getYaw());
-        double cos = Math.cos(yawRad);
-        double sin = Math.sin(yawRad);
-
-        double lx = locPx.x * LOC_SCALE;
-        double ly = locPx.y * LOC_SCALE;
-        double lz = locPx.z * LOC_SCALE;
-
-        double rx = lx * cos - lz * sin;
-        double rz = lx * sin + lz * cos;
-
-        return this.getPos().add(rx, ly, rz);
-    }
-
-    private void spawnNozzleSmoke(ServerWorld sw) {
-        // 軽め：2tickに1回、少量
-        if ((this.age & 1) != 0) return;
-
-        Vec3d p = toWorldFromLocator(NOZZLE_LOC);
-        sw.spawnParticles(
-                net.minecraft.particle.ParticleTypes.SMOKE,
-                p.x, p.y, p.z,
-                1,
-                0.02, 0.02, 0.02,
-                0.005
-        );
-    }
-    // ===== locator(px) -> world =====
-    private static Vec3d locatorPxToWorld(Vec3d locPx, float yawDeg, Vec3d basePos) {
-        // Bedrock locator: x=右, y=上, z=前 を想定
-        double yawRad = Math.toRadians(yawDeg);
-        double cos = Math.cos(yawRad);
-        double sin = Math.sin(yawRad);
-
-        double lx = locPx.x / 16.0;
-        double ly = locPx.y / 16.0;
-        double lz = locPx.z / 16.0;
-
-        // yaw 回転（Y軸）
-        double rx = lx * cos - lz * sin;
-        double rz = lx * sin + lz * cos;
-
-        return basePos.add(rx, ly, rz);
-    }
-    private void ensureGunTrainMounted(ServerWorld sw) {
-        if (gunTrainUuid == null) return;
-
-        Entity e = sw.getEntity(gunTrainUuid);
-        if (!(e instanceof GunTrainEntity gun) || !gun.isAlive()) return;
-
-        if (gun.getVehicle() != this) {
-            gun.stopRiding();
-            gun.startRiding(this, true);
+        // クールタイム開始＆アニメ解除
+        if (nozomiPassengerUuid != null) {
+            Entity p = sw.getEntity(nozomiPassengerUuid);
+            if (p instanceof NozomiEntity n && n.isAlive()) {
+                n.setTrainSkillActive(false);
+                n.startTrainCooldown();
+            }
         }
+        this.discard();
     }
 
-    // ===== Train seat locator + tuning =====
-    private static final Vec3d SEAT_PX   = new Vec3d(0.4, 13.4, 6.6);
-    private static final Vec3d SEAT_TUNE = new Vec3d(0.0, 0.0, -12.0); // ★ここを調整
+    private boolean tryChargeHit(ServerWorld sw) {
+        // ★ Train自身の bounding box を使わない。位置中心の Box を作る
+        Vec3d c = this.getPos();
+        Box box = new Box(c, c).expand(CHARGE_HIT_RADIUS, 1.6, CHARGE_HIT_RADIUS);
 
-    private Vec3d getSeatWorldTrain() {
-        // ★重要：基準は this.getPos()（エンティティ原点）
-        return locatorPxToWorld(SEAT_PX.add(SEAT_TUNE), this.getYaw(), this.getPos());
-    }
-    private boolean isOwnerAlive(ServerWorld sw) {
-        if (ownerPlayerUuid == null) return false;
+        var list = sw.getEntitiesByClass(net.minecraft.entity.mob.HostileEntity.class, box, LivingEntity::isAlive);
+        if (list.isEmpty()) return false;
 
-        // ノゾミが存在するか
-        for (NozomiEntity n : sw.getEntitiesByClass(
-                NozomiEntity.class,
-                this.getBoundingBox().expand(128),
-                e -> e.isAlive()
-        )) {
-            if (ownerPlayerUuid.equals(n.getOwnerUuid())) return true;
+        // 一番近い敵
+        net.minecraft.entity.mob.HostileEntity best = null;
+        double bestD2 = 1e18;
+        for (var h : list) {
+            // 乗客(ノゾミ)を巻き込まない（Hostile限定なら不要だけど保険）
+            if (nozomiPassengerUuid != null && h.getUuid().equals(nozomiPassengerUuid)) continue;
+
+            double d2 = h.squaredDistanceTo(c);
+            if (d2 < bestD2) { bestD2 = d2; best = h; }
         }
-        return false;
+        if (best == null) return false;
+
+        // ★ダメージ（magicで無効化されるケースがあるので generic に）
+        best.damage(sw.getDamageSources().generic(), CHARGE_DAMAGE);
+
+        // ★ノックバック：takeKnockback を使う（addVelocityより反映が確実）
+        Vec3d push = best.getPos().subtract(c);
+        if (push.horizontalLengthSquared() < 1.0e-6) push = new Vec3d(0, 0, 1);
+        Vec3d dir = new Vec3d(push.x, 0, push.z).normalize();
+
+        best.takeKnockback((float)KNOCKBACK_H, -dir.x, -dir.z); // takeKnockbackは「押される向き」の指定が直感と逆になりがち
+        best.addVelocity(0.0, KNOCKBACK_Y, 0.0);
+        best.velocityModified = true;
+
+        return true;
     }
+    // Trainの前方/右方向ベクトル
+    private static Vec3d forwardFromYaw(float yawDeg) {
+        float r = yawDeg * MathHelper.RADIANS_PER_DEGREE;
+        return new Vec3d(-MathHelper.sin(r), 0, MathHelper.cos(r));
+    }
+
+    private Vec3d getSeatWorldNozomiOnTrain() {
+        Vec3d forward = forwardFromYaw(this.getYaw()).normalize();
+        Vec3d right = forward.crossProduct(new Vec3d(0, 1, 0)).normalize();
+
+        // ★ノゾミ座席：中央ちょい上・少し後ろ（好みで調整）
+        return this.getPos()
+                .add(0, 0.90, 0)
+                .add(forward.multiply(-0.10))
+                .add(right.multiply(0.00));
+    }
+
+    private Vec3d getSeatWorldGunOnTrain() {
+        Vec3d forward = forwardFromYaw(this.getYaw()).normalize();
+        Vec3d right = forward.crossProduct(new Vec3d(0, 1, 0)).normalize();
+
+        // ★GunTrain座席：Trainの右側に配置（重なり防止）
+        // ここを調整すると「重なってる」が一発で直ります
+        return this.getPos()
+                .add(0, 0.65, 0)
+                .add(forward.multiply(0.05))
+                .add(right.multiply(+1.10));
+    }
+
 }

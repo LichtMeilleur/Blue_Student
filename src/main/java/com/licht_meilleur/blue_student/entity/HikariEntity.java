@@ -17,6 +17,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import software.bernie.geckolib.core.animation.RawAnimation;
 
@@ -36,6 +37,13 @@ public class HikariEntity extends AbstractStudentEntity {
             DataTracker.registerData(HikariEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
 
+    private int gunTrainSkillCooldown = 0;
+    private static final int GUNTRAIN_COOLDOWN_MAX = 20 * 12; // 12秒（好みで）
+
+    private boolean hardLocked = false;
+    private double lockX, lockY, lockZ;
+    private float lockYaw;
+
     public HikariEntity(EntityType<? extends AbstractStudentEntity> type, World world) {
         super(type, world);
     }
@@ -44,7 +52,12 @@ public class HikariEntity extends AbstractStudentEntity {
         super.initDataTracker();
         this.dataTracker.startTracking(GUN_TRAIN_ACTIVE, false);
     }
-
+    @Override
+    public void stopRiding() {
+        super.stopRiding();
+        this.noClip = false;
+        this.setNoGravity(false);
+    }
 
     public void setGunTrainSkillActive(boolean active) {
         if (this.getWorld().isClient) return;
@@ -126,7 +139,52 @@ public class HikariEntity extends AbstractStudentEntity {
                 1.0));
         this.goalSelector.add(12, new StudentEatGoal(this, this));
     }
+    @Override
+    public void tick() {
+        super.tick();
+        if (!this.getWorld().isClient) {
+            if (gunTrainSkillCooldown > 0) gunTrainSkillCooldown--;
+        }
+    }
 
-    
+    public boolean canUseGunTrainSkill() {
+        return gunTrainSkillCooldown <= 0;
+    }
 
+    public void startGunTrainCooldown() {
+        gunTrainSkillCooldown = GUNTRAIN_COOLDOWN_MAX;
+    }
+
+    @Override
+    public void tickMovement() {
+        if (hardLocked) {
+            // ここが「最終的に勝つ」場所
+            this.setVelocity(Vec3d.ZERO);
+            this.velocityModified = true;
+
+            this.setNoGravity(true);
+            this.noClip = true;
+
+            this.setPos(lockX, lockY, lockZ);
+            this.prevX = lockX;
+            this.prevY = lockY;
+            this.prevZ = lockZ;
+
+            this.prevYaw = lockYaw;
+            this.setYaw(lockYaw);
+            this.setPitch(0f);
+
+            this.bodyYaw = lockYaw;
+            this.headYaw = lockYaw;
+            this.prevBodyYaw = lockYaw;
+            this.prevHeadYaw = lockYaw;
+
+            // Navigation/AI停止（残ってたら）
+            if (this.getNavigation() != null) this.getNavigation().stop();
+
+            return; // ★superに行かない
+        }
+
+        super.tickMovement();
+    }
 }
