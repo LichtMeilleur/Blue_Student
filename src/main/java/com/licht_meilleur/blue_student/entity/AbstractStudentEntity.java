@@ -1231,37 +1231,34 @@ public abstract class AbstractStudentEntity extends PathAwareEntity implements I
     }
 
     //　マズル位置
-    @Environment(EnvType.CLIENT)
     private Vec3d clientMuzzleWorldPos = null;
+    private Vec3d clientSubMuzzleWorldPos = null;
+    private Vec3d clientLeftSubMuzzleWorldPos = null;
+    private Vec3d clientRightSubMuzzleWorldPos = null;
 
-    @Environment(EnvType.CLIENT)
-    public void setClientMuzzleWorldPos(Vec3d pos) { this.clientMuzzleWorldPos = pos; }
+    public void setClientMuzzleWorldPos(Vec3d pos) {
+        this.clientMuzzleWorldPos = pos;
+    }
 
-    @Environment(EnvType.CLIENT)
     public Vec3d getClientMuzzleWorldPosOrApprox() {
         return (clientMuzzleWorldPos != null) ? clientMuzzleWorldPos : getMuzzlePosApprox();
     }
 
-    @Environment(EnvType.CLIENT)
-    private Vec3d clientSubMuzzleWorldPos = null;
+    public void setClientSubMuzzleWorldPos(Vec3d pos) {
+        this.clientSubMuzzleWorldPos = pos;
+    }
 
-    @Environment(EnvType.CLIENT)
-    public void setClientSubMuzzleWorldPos(Vec3d pos) { this.clientSubMuzzleWorldPos = pos; }
-
-    @Environment(EnvType.CLIENT)
     public Vec3d getClientSubMuzzleWorldPosOrApprox() {
         return (clientSubMuzzleWorldPos != null) ? clientSubMuzzleWorldPos : getClientMuzzleWorldPosOrApprox();
     }
-    @Environment(EnvType.CLIENT)
-    private Vec3d clientLeftSubMuzzleWorldPos = null;
-    @Environment(EnvType.CLIENT)
-    public void setClientLeftSubMuzzleWorldPos(Vec3d pos) { this.clientLeftSubMuzzleWorldPos = pos; }
 
-    @Environment(EnvType.CLIENT)
-    private Vec3d clientRightSubMuzzleWorldPos = null;
-    @Environment(EnvType.CLIENT)
-    public void setClientRightSubMuzzleWorldPos(Vec3d pos) { this.clientRightSubMuzzleWorldPos = pos; }
+    public void setClientLeftSubMuzzleWorldPos(Vec3d pos) {
+        this.clientLeftSubMuzzleWorldPos = pos;
+    }
 
+    public void setClientRightSubMuzzleWorldPos(Vec3d pos) {
+        this.clientRightSubMuzzleWorldPos = pos;
+    }
     // ===== movement tweak =====
     @Override
     public void tickMovement() {

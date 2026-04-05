@@ -207,13 +207,7 @@ public class StudentAimGoal extends Goal {
 
 
 
-        if (mob.age % 10 == 0 && mob instanceof AbstractStudentEntity ase && ase.getForm() == StudentForm.BR) {
-            System.out.println("[AIM-BR] hasSub=" + student.hasQueuedFireSub()
-                    + " hasMain=" + student.hasQueuedFire()
-                    + " fireTarget=" + (fireTarget != null)
-                    + " aimTicks=" + aimTicks
-                    + " brAction=" + ase.getBrActionServer());
-        }
+
 
 
         // 6) 実射撃

@@ -6,6 +6,7 @@ import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
+import net.minecraft.item.ItemStack;
 import net.minecraft.state.StateManager;
 import net.minecraft.state.property.EnumProperty;
 import net.minecraft.state.property.Properties;
@@ -91,19 +92,14 @@ public class TabletBlock extends BlockWithEntity {
     public void onBreak(World world, BlockPos pos, BlockState state, PlayerEntity player) {
         DoubleBlockHalf half = state.get(HALF);
         BlockPos basePos = (half == DoubleBlockHalf.LOWER) ? pos : pos.down();
+        BlockPos otherPos = (half == DoubleBlockHalf.LOWER) ? pos.up() : pos.down();
+        BlockState otherState = world.getBlockState(otherPos);
 
         if (!world.isClient) {
-            // ★ドロップはLOWER（=base）だけ
-            if (basePos.equals(pos)) {
-                dropStack(world, basePos, new net.minecraft.item.ItemStack(BlueStudentMod.TABLET_BLOCK_ITEM ));
-                // ↑ TABLET_ITEM はあなたの登録名に合わせて
-            }
+            dropStack(world, basePos, new ItemStack(BlueStudentMod.TABLET_BLOCK_ITEM));
 
-            // 相方をdrop無しで破壊
-            BlockPos otherPos = (half == DoubleBlockHalf.LOWER) ? pos.up() : pos.down();
-            BlockState other = world.getBlockState(otherPos);
-            if (other.isOf(this) && other.get(HALF) != half) {
-                world.breakBlock(otherPos, false, player);
+            if (otherState.isOf(this) && otherState.get(HALF) != half) {
+                world.setBlockState(otherPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
             }
         }
 

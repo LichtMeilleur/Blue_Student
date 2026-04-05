@@ -1,5 +1,6 @@
 package com.licht_meilleur.blue_student.block;
 
+import com.licht_meilleur.blue_student.BlueStudentMod;
 import com.licht_meilleur.blue_student.block.entity.CraftChamberBlockEntity;
 import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
@@ -66,12 +67,20 @@ public class CraftChamberBlock extends BlockWithEntity {
     @Override
     public void onBreak(World world, BlockPos pos, BlockState state, PlayerEntity player) {
         DoubleBlockHalf half = state.get(HALF);
+        BlockPos basePos = (half == DoubleBlockHalf.LOWER) ? pos : pos.down();
         BlockPos otherPos = (half == DoubleBlockHalf.LOWER) ? pos.up() : pos.down();
         BlockState otherState = world.getBlockState(otherPos);
 
-        if (otherState.isOf(this)) {
-            world.breakBlock(otherPos, false, player);
+        if (!world.isClient) {
+            // どっちを壊しても1回だけ下側位置からドロップ
+            dropStack(world, basePos, new ItemStack(BlueStudentMod.CRAFT_CHAMBER_ITEM));
+
+            // 相方は onBreak を呼ばずに消す
+            if (otherState.isOf(this) && otherState.get(HALF) != half) {
+                world.setBlockState(otherPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+            }
         }
+
         super.onBreak(world, pos, state, player);
     }
 

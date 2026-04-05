@@ -81,14 +81,22 @@ public class ModPackets {
                     boolean creative = player.getAbilities().creativeMode;
 
                     // ★コストチェック（消費はまだしない）
+// Ticket 1枚以上 または Diamond 64個以上で通す
                     if (!creative) {
-                        int have = countItem(player, Items.DIAMOND);
-                        if (have < COST_DIAMOND) {
-                            player.sendMessage(Text.literal("Need " + COST_DIAMOND + " diamonds (have " + have + ")"), false);
+                        int ticketCount = countItem(player, BlueStudentMod.TICKET);
+                        int diamondCount = countItem(player, Items.DIAMOND);
+
+                        boolean hasTicketCost = ticketCount >= 1;
+                        boolean hasDiamondCost = diamondCount >= COST_DIAMOND;
+
+                        if (!hasTicketCost && !hasDiamondCost) {
+                            player.sendMessage(
+                                    Text.literal("Not enough cost. Need 1 Ticket or " + COST_DIAMOND + " Diamonds.")
+                                    , false
+                            );
                             return;
                         }
                     }
-
                     // 生徒生成
                     Entity raw = switch (sid) {
                         case SHIROKO -> BlueStudentMod.SHIROKO.create(sw);
